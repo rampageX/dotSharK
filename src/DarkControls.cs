@@ -8,7 +8,7 @@ namespace dotSharK
 {
     internal static class DarkPalette
     {
-        internal const int ControlHeight = 30;
+        internal const int ControlHeight = 24;
         internal static readonly Color Background = Color.FromArgb(34, 34, 34);
         internal static readonly Color Surface = Color.FromArgb(43, 43, 43);
         internal static readonly Color Field = Color.FromArgb(51, 51, 51);

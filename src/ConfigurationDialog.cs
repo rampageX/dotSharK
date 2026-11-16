@@ -55,17 +55,17 @@ namespace dotSharK
         private void BuildToolsPage(Panel page, string[] values)
         {
             var content = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, BackColor = bg };
-            content.RowStyles.Add(new RowStyle(SizeType.Absolute, 250)); content.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            content.RowStyles.Add(new RowStyle(SizeType.Absolute, 180)); content.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             var grid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 5, BackColor = bg };
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 116)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92));
-            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); for (int i = 0; i < 4; i++) grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); for (int i = 0; i < 4; i++) grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
             grid.Controls.Add(StyledLabel("程序"), 0, 0); grid.Controls.Add(StyledLabel("可执行文件路径（留空时自动检查 dotSharK 目录和 tools 子目录）"), 1, 0);
             for (int i = 0; i < 4; i++)
             {
                 int index = i, row = i + 1;
                 grid.Controls.Add(StyledLabel(toolNames[i]), 0, row);
-                toolPaths[i] = StyledTextBox(values[i]); toolPaths[i].Dock = DockStyle.Fill; toolPaths[i].Margin = new Padding(0, 6, 8, 6); grid.Controls.Add(toolPaths[i], 1, row);
-                var browse = StyledButton("浏览…", false); browse.Dock = DockStyle.Fill; browse.Margin = new Padding(0, 6, 0, 6); browse.Click += (s, e) => BrowseTool(index); grid.Controls.Add(browse, 2, row);
+                toolPaths[i] = StyledTextBox(values[i]); SetBottomField(toolPaths[i], true, 8); grid.Controls.Add(toolPaths[i], 1, row);
+                var browse = StyledButton("浏览…", false); SetBottomField(browse, true, 0); browse.Click += (s, e) => BrowseTool(index); grid.Controls.Add(browse, 2, row);
             }
             content.Controls.Add(grid, 0, 0);
             content.Controls.Add(new Label { Text = "路径保存在 dotSharK.ini 中。YT-DLP 页面中的代理、并发和 Cookie 设置同样由 dotSharK 统一传参。", Dock = DockStyle.Fill, ForeColor = muted, Padding = new Padding(0, 12, 0, 0), AutoEllipsis = true }, 0, 1);
@@ -76,21 +76,21 @@ namespace dotSharK
         {
             var grid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 9, BackColor = bg, Padding = new Padding(2) };
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 106));
-            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
             grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
             grid.Controls.Add(StyledLabel("代理"), 0, 0);
-            proxyBox = StyledTextBox(Options.Proxy); proxyBox.Dock = DockStyle.Fill; grid.Controls.Add(proxyBox, 1, 0); grid.SetColumnSpan(proxyBox, 2);
+            proxyBox = StyledTextBox(Options.Proxy); SetBottomField(proxyBox, true, 0); grid.Controls.Add(proxyBox, 1, 0); grid.SetColumnSpan(proxyBox, 2);
             grid.Controls.Add(StyledLabel("分片并发"), 0, 1);
-            fragmentsBox = new DarkNumericUpDown { Minimum = 1, Maximum = 32, Value = Math.Max(1, Math.Min(32, Options.ConcurrentFragments)), Width = 116, Height = DarkPalette.ControlHeight, Margin = new Padding(0, 6, 0, 6), BackColor = field, ForeColor = fg, BorderStyle = BorderStyle.FixedSingle, TextAlign = HorizontalAlignment.Center };
+            fragmentsBox = new DarkNumericUpDown { Minimum = 1, Maximum = 32, Value = Math.Max(1, Math.Min(32, Options.ConcurrentFragments)), Width = 116, Height = DarkPalette.ControlHeight, Margin = Padding.Empty, Anchor = AnchorStyles.Left | AnchorStyles.Bottom, BackColor = field, ForeColor = fg, BorderStyle = BorderStyle.FixedSingle, TextAlign = HorizontalAlignment.Center };
             grid.Controls.Add(fragmentsBox, 1, 1);
             grid.Controls.Add(new Label { Text = "下载分片并发数", ForeColor = muted, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 2, 1);
 
             grid.Controls.Add(StyledLabel("Cookie 来源"), 0, 2);
-            sourceBox = StyledCombo(new[] { "浏览器", "Cookie 文件" }); sourceBox.SelectedIndex = Options.CookieMode == "file" ? 1 : 0; sourceBox.Width = 150; grid.Controls.Add(sourceBox, 1, 2);
+            sourceBox = StyledCombo(new[] { "浏览器", "Cookie 文件" }); sourceBox.SelectedIndex = Options.CookieMode == "file" ? 1 : 0; sourceBox.Width = 150; sourceBox.Anchor = AnchorStyles.Left | AnchorStyles.Bottom; grid.Controls.Add(sourceBox, 1, 2);
             grid.Controls.Add(StyledLabel("浏览器"), 0, 3);
             var browsers = new[] {
                 new BrowserOption { Name="firefox", Label="Firefox" }, new BrowserOption { Name="chrome", Label="Chrome" },
@@ -99,20 +99,20 @@ namespace dotSharK
                 new BrowserOption { Name="vivaldi", Label="Vivaldi" }, new BrowserOption { Name="safari", Label="Safari" },
                 new BrowserOption { Name="whale", Label="Whale" }
             };
-            browserBox = StyledCombo(browsers.Cast<object>().ToArray()); browserBox.Width = 190; grid.Controls.Add(browserBox, 1, 3);
+            browserBox = StyledCombo(browsers.Cast<object>().ToArray()); browserBox.Width = 190; browserBox.Anchor = AnchorStyles.Left | AnchorStyles.Bottom; grid.Controls.Add(browserBox, 1, 3);
             string browserName = String.IsNullOrWhiteSpace(Options.CookieBrowser) ? "firefox" : Options.CookieBrowser;
             for (int i = 0; i < browserBox.Items.Count; i++) if (((BrowserOption)browserBox.Items[i]).Name == browserName) browserBox.SelectedIndex = i;
 
             grid.Controls.Add(StyledLabel("搜索目录"), 0, 4);
-            profileRootBox = StyledTextBox(Options.CookieProfileRoot); profileRootBox.Dock = DockStyle.Fill; profileRootBox.Margin = new Padding(0, 6, 8, 6); grid.Controls.Add(profileRootBox, 1, 4);
-            var rootButtons = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = new Padding(0, 6, 0, 6), BackColor = bg };
+            profileRootBox = StyledTextBox(Options.CookieProfileRoot); SetBottomField(profileRootBox, true, 8); grid.Controls.Add(profileRootBox, 1, 4);
+            var rootButtons = new TableLayoutPanel { ColumnCount = 2, RowCount = 1, BackColor = bg, Height = DarkPalette.ControlHeight, Margin = Padding.Empty, Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom };
             rootButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50)); rootButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
             var rootBrowse = StyledButton("选择", false); rootBrowse.Dock = DockStyle.Fill; rootBrowse.Margin = new Padding(0, 0, 3, 0); rootBrowse.Click += BrowseProfileRoot;
             profileSearchButton = StyledButton("搜索", true); profileSearchButton.Dock = DockStyle.Fill; profileSearchButton.Margin = new Padding(3, 0, 0, 0); profileSearchButton.Click += async (s, e) => await SearchProfiles();
             rootButtons.Controls.Add(rootBrowse, 0, 0); rootButtons.Controls.Add(profileSearchButton, 1, 0); grid.Controls.Add(rootButtons, 2, 4);
 
             grid.Controls.Add(StyledLabel("浏览器配置"), 0, 5);
-            var profileRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, BackColor = bg, Margin = new Padding(0, 6, 0, 6) };
+            var profileRow = new TableLayoutPanel { ColumnCount = 2, RowCount = 1, BackColor = bg, Height = DarkPalette.ControlHeight, Margin = Padding.Empty, Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom };
             profileRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); profileRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 34));
             profileBox = StyledCombo(new object[0]); profileBox.DropDownStyle = ComboBoxStyle.DropDown; profileBox.Dock = DockStyle.Fill; profileBox.Margin = new Padding(0, 0, 5, 0); profileRow.Controls.Add(profileBox, 0, 0);
             profileFoundCheck = new Label { Text = "", ForeColor = green, Font = new Font("Segoe UI Symbol", 14F, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Visible = false, BackColor = bg };
@@ -121,8 +121,8 @@ namespace dotSharK
             profileStatus = new Label { Text = "默认浏览器配置自动读取；指定目录后可递归搜寻 Cookie 数据库。", ForeColor = muted, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
             grid.Controls.Add(profileStatus, 1, 6); grid.SetColumnSpan(profileStatus, 2);
             grid.Controls.Add(StyledLabel("Cookie 文件"), 0, 7);
-            cookieFileBox = StyledTextBox(Options.CookieFile); cookieFileBox.Dock = DockStyle.Fill; cookieFileBox.Margin = new Padding(0, 6, 8, 6); grid.Controls.Add(cookieFileBox, 1, 7);
-            var cookieBrowse = StyledButton("浏览…", false); cookieBrowse.Dock = DockStyle.Fill; cookieBrowse.Margin = new Padding(0, 6, 0, 6); cookieBrowse.Click += BrowseCookieFile; grid.Controls.Add(cookieBrowse, 2, 7);
+            cookieFileBox = StyledTextBox(Options.CookieFile); SetBottomField(cookieFileBox, true, 8); grid.Controls.Add(cookieFileBox, 1, 7);
+            var cookieBrowse = StyledButton("浏览…", false); SetBottomField(cookieBrowse, true, 0); cookieBrowse.Click += BrowseCookieFile; grid.Controls.Add(cookieBrowse, 2, 7);
             cookieFileStatus = new Label { Text = "浏览器模式默认 Firefox。Cookie 文件需为 Netscape 格式。", ForeColor = muted, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
             grid.Controls.Add(cookieFileStatus, 1, 8); grid.SetColumnSpan(cookieFileStatus, 2);
             page.Controls.Add(grid);
@@ -457,10 +457,17 @@ namespace dotSharK
         }
         private DarkComboBox StyledCombo(object[] items)
         {
-            var combo = new DarkComboBox { Height = DarkPalette.ControlHeight, Margin = new Padding(0, 6, 0, 6) };
+            var combo = new DarkComboBox { Height = DarkPalette.ControlHeight, Margin = Padding.Empty };
             combo.Items.AddRange(items); if (combo.Items.Count > 0) combo.SelectedIndex = 0; return combo;
         }
-        private TextBox StyledTextBox(string text) { return new DarkTextBox { Text = text ?? "", Font = Font, AutoSize = false, Height = DarkPalette.ControlHeight, Margin = new Padding(0, 6, 0, 6) }; }
+        private TextBox StyledTextBox(string text) { return new DarkTextBox { Text = text ?? "", Font = Font, Multiline = false, AutoSize = false, Height = DarkPalette.ControlHeight, Margin = Padding.Empty }; }
+        private static void SetBottomField(Control control, bool stretch, int rightMargin)
+        {
+            control.Dock = DockStyle.None;
+            control.Height = DarkPalette.ControlHeight;
+            control.Margin = new Padding(0, 0, rightMargin, 0);
+            control.Anchor = AnchorStyles.Left | AnchorStyles.Bottom | (stretch ? AnchorStyles.Right : AnchorStyles.None);
+        }
         private Label StyledLabel(string text) { return new Label { Text = text, ForeColor = fg, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true }; }
         private Button StyledButton(string text, bool accent) { return new DarkButton { Text = text, Primary = accent, Font = Font, Height = DarkPalette.ControlHeight, MinimumSize = new Size(0, DarkPalette.ControlHeight) }; }
     }

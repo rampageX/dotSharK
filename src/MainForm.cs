@@ -42,13 +42,13 @@ namespace dotSharK
         private void BuildUi()
         {
             var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(22, 16, 22, 18), BackColor = bg };
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 118)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 118)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
             Controls.Add(root);
 
             var brand = new Panel { Dock = DockStyle.Fill };
             var logo = new Label { Text = "dotSharK", Font = new Font("Microsoft YaHei UI", 19F, FontStyle.Bold), ForeColor = green, AutoSize = true, Location = new Point(0, 0) };
             var tagline = new Label { Text = "轻快的 yt-dlp 桌面外壳", ForeColor = muted, AutoSize = true, Location = new Point(126, 13) };
-            var configHost = new Panel { Dock = DockStyle.Right, Width = 110, Padding = new Padding(0, 6, 0, 6) };
+            var configHost = new Panel { Dock = DockStyle.Right, Width = 110, Padding = new Padding(0, 9, 0, 9) };
             configButton = GhostButton("配置…", 110); configButton.Dock = DockStyle.Fill; configButton.Click += OpenConfiguration;
             configHost.Controls.Add(configButton);
             brand.Controls.Add(logo); brand.Controls.Add(tagline); brand.Controls.Add(configHost); root.Controls.Add(brand, 0, 0);
@@ -68,7 +68,7 @@ namespace dotSharK
 
             var body = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, BackColor = bg, Padding = new Padding(0, 10, 0, 8) };
             body.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); body.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); body.RowStyles.Add(new RowStyle(SizeType.Absolute, 122));
-            var settings = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 8, RowCount = 1, BackColor = bg, Padding = new Padding(0, 6, 0, 6) };
+            var settings = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 8, RowCount = 1, BackColor = bg, Padding = new Padding(0, 9, 0, 9) };
             float[] widths = { 6, 18, 6, 18, 7, 22, 7, 16 };
             foreach (float width in widths) settings.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, width));
             settings.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -114,12 +114,12 @@ namespace dotSharK
             body.Controls.Add(formatsGrid, 0, 1);
 
             var lower = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, BackColor = bg };
-            lower.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); lower.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            lower.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); lower.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             var pathRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, BackColor = bg };
             pathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 75)); pathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); pathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
             pathRow.Controls.Add(new Label { Text = "保存到", ForeColor = muted, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
-            folderBox = InputBox(); folderBox.Dock = DockStyle.Fill; folderBox.Margin = new Padding(0, 4, 0, 4); folderBox.TextChanged += (s, e) => SaveSettings(); pathRow.Controls.Add(folderBox, 1, 0);
-            browseFolderButton = GhostButton("浏览…", 90); browseFolderButton.Dock = DockStyle.Fill; browseFolderButton.Margin = new Padding(0, 4, 0, 4); browseFolderButton.Click += BrowseFolder; pathRow.Controls.Add(browseFolderButton, 2, 0);
+            folderBox = InputBox(); folderBox.Dock = DockStyle.Fill; folderBox.Margin = new Padding(0, 8, 0, 0); folderBox.TextChanged += (s, e) => SaveSettings(); pathRow.Controls.Add(folderBox, 1, 0);
+            browseFolderButton = GhostButton("浏览…", 90); browseFolderButton.Dock = DockStyle.Fill; browseFolderButton.Margin = new Padding(0, 8, 0, 0); browseFolderButton.Click += BrowseFolder; pathRow.Controls.Add(browseFolderButton, 2, 0);
             lower.Controls.Add(pathRow, 0, 0);
             var logFrame = new Panel { Dock = DockStyle.Fill, BackColor = DarkPalette.Border, Padding = new Padding(1), Margin = Padding.Empty };
             logBox = InputBox(); logBox.Dock = DockStyle.Fill; logBox.Multiline = true; logBox.BorderStyle = BorderStyle.None; logBox.ScrollBars = ScrollBars.Vertical; logBox.ReadOnly = true; logBox.Font = new Font("Consolas", 8.5F); logBox.ForeColor = muted;
@@ -131,7 +131,7 @@ namespace dotSharK
             footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 176)); footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 136));
             stateLabel = new Label { Text = "就绪", Dock = DockStyle.Fill, ForeColor = muted, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
             progress = new ProgressBar { Dock = DockStyle.Fill, Style = ProgressBarStyle.Marquee, MarqueeAnimationSpeed = 24, Visible = false, Margin = new Padding(4, 10, 16, 10) };
-            downloadButton = AccentButton("下载"); downloadButton.Dock = DockStyle.Fill; downloadButton.Margin = new Padding(0, 8, 0, 8); downloadButton.Enabled = false; downloadButton.Click += async (s, e) => await Download();
+            downloadButton = AccentButton("下载"); downloadButton.Dock = DockStyle.Fill; downloadButton.Margin = new Padding(0, 11, 0, 11); downloadButton.Enabled = false; downloadButton.Click += async (s, e) => await Download();
             footer.Controls.Add(stateLabel, 0, 0); footer.Controls.Add(progress, 1, 0); footer.Controls.Add(downloadButton, 2, 0); root.Controls.Add(footer, 0, 4);
             AcceptButton = analyzeButton;
         }
