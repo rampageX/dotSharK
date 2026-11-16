@@ -9,13 +9,13 @@ namespace dotSharK
 {
     internal sealed class MainForm : Form
     {
-        private readonly Color bg = Color.FromArgb(34, 34, 34), panel = Color.FromArgb(43, 43, 43), field = Color.FromArgb(51, 51, 51), green = Color.FromArgb(96, 185, 28), muted = Color.FromArgb(153, 163, 170), fg = Color.FromArgb(235, 238, 240), line = Color.FromArgb(65, 65, 65);
+        private readonly Color bg = Color.FromArgb(34, 34, 34), panel = Color.FromArgb(43, 43, 43), field = Color.FromArgb(51, 51, 51), green = DarkPalette.Accent, muted = Color.FromArgb(153, 163, 170), fg = Color.FromArgb(235, 238, 240), line = Color.FromArgb(65, 65, 65);
         private DarkTextBox urlBox, folderBox, logBox;
         private Button analyzeButton, downloadButton, configButton, browseFolderButton;
         private DarkComboBox modeBox, containerBox, audioBox, subtitleBox;
         private DataGridView formatsGrid;
         private Label titleLabel, detailsLabel, stateLabel;
-        private ProgressBar progress;
+        private DarkProgressBar progress;
         private MediaInfo current;
         private VideoChoice selectedVideo;
         private AudioChoice selectedAudio;
@@ -42,16 +42,17 @@ namespace dotSharK
         private void BuildUi()
         {
             var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(22, 16, 22, 18), BackColor = bg };
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 118)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 118)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 29));
             Controls.Add(root);
 
             var brand = new Panel { Dock = DockStyle.Fill };
             var logo = new Label { Text = "dotSharK", Font = new Font("Microsoft YaHei UI", 19F, FontStyle.Bold), ForeColor = green, AutoSize = true, Location = new Point(0, 0) };
-            var tagline = new Label { Text = "轻快的 yt-dlp 桌面外壳", ForeColor = muted, AutoSize = true, Location = new Point(126, 13) };
+            var tagline = new Label { Text = "做最快的 yt-dlp 桌面外壳", ForeColor = muted, AutoSize = true, Location = new Point(0, 13) };
+            logo.SizeChanged += (s, e) => tagline.Left = logo.Right + 10;
             var configHost = new Panel { Dock = DockStyle.Right, Width = 110, Padding = new Padding(0, 9, 0, 9) };
             configButton = GhostButton("配置…", 110); configButton.Dock = DockStyle.Fill; configButton.Click += OpenConfiguration;
             configHost.Controls.Add(configButton);
-            brand.Controls.Add(logo); brand.Controls.Add(tagline); brand.Controls.Add(configHost); root.Controls.Add(brand, 0, 0);
+            brand.Controls.Add(logo); brand.Controls.Add(tagline); tagline.Left = logo.Right + 10; brand.Controls.Add(configHost); root.Controls.Add(brand, 0, 0);
 
             var entry = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, BackColor = bg, Padding = new Padding(0, 9, 0, 9) };
             entry.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); entry.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104));
@@ -66,8 +67,8 @@ namespace dotSharK
             detailsLabel = new Label { Text = "解析后会显示标题、时长、分辨率、编码、动态范围、帧率与字幕信息。", Dock = DockStyle.Fill, ForeColor = muted, AutoEllipsis = true };
             metadata.Controls.Add(detailsLabel); metadata.Controls.Add(titleLabel); root.Controls.Add(metadata, 0, 2);
 
-            var body = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, BackColor = bg, Padding = new Padding(0, 10, 0, 8) };
-            body.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); body.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); body.RowStyles.Add(new RowStyle(SizeType.Absolute, 122));
+            var body = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, BackColor = bg, Padding = new Padding(0, 10, 0, 0) };
+            body.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); body.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); body.RowStyles.Add(new RowStyle(SizeType.Absolute, 136));
             var settings = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 8, RowCount = 1, BackColor = bg, Padding = new Padding(0, 9, 0, 9) };
             float[] widths = { 6, 18, 6, 18, 7, 22, 7, 16 };
             foreach (float width in widths) settings.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, width));
@@ -82,7 +83,7 @@ namespace dotSharK
             formatsGrid = new DataGridView { Dock = DockStyle.Fill, BackgroundColor = panel, BorderStyle = BorderStyle.None, GridColor = line, AllowUserToAddRows = false, AllowUserToDeleteRows = false, AllowUserToResizeRows = false, ReadOnly = true, MultiSelect = false, SelectionMode = DataGridViewSelectionMode.FullRowSelect, RowHeadersVisible = false, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill, EnableHeadersVisualStyles = false, ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None, RowHeadersBorderStyle = DataGridViewHeaderBorderStyle.None, CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal, ColumnHeadersHeight = 34, RowTemplate = { Height = 40 }, Visible = true };
             formatsGrid.AdvancedColumnHeadersBorderStyle.All = DataGridViewAdvancedCellBorderStyle.None;
             formatsGrid.ColumnHeadersDefaultCellStyle.BackColor = panel; formatsGrid.ColumnHeadersDefaultCellStyle.ForeColor = muted; formatsGrid.ColumnHeadersDefaultCellStyle.SelectionBackColor = panel;
-            formatsGrid.DefaultCellStyle.BackColor = panel; formatsGrid.DefaultCellStyle.ForeColor = fg; formatsGrid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(51, 75, 39); formatsGrid.DefaultCellStyle.SelectionForeColor = fg; formatsGrid.DefaultCellStyle.Padding = new Padding(8, 0, 8, 0);
+            formatsGrid.DefaultCellStyle.BackColor = panel; formatsGrid.DefaultCellStyle.ForeColor = fg; formatsGrid.DefaultCellStyle.SelectionBackColor = DarkPalette.Selection; formatsGrid.DefaultCellStyle.SelectionForeColor = fg; formatsGrid.DefaultCellStyle.Padding = new Padding(8, 0, 8, 0);
             formatsGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "resolution", HeaderText = "分辨率", FillWeight = 24 });
             formatsGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "codec", HeaderText = "编码 / HDR", FillWeight = 33 });
             formatsGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "fps", HeaderText = "帧率", FillWeight = 16 });
@@ -112,6 +113,7 @@ namespace dotSharK
             formatsGrid.CellClick += (s, e) => { if (e.RowIndex >= 0) selectedVideo = formatsGrid.Rows[e.RowIndex].Tag as VideoChoice; };
             formatsGrid.SelectionChanged += (s, e) => { if (formatsGrid.CurrentRow != null) selectedVideo = formatsGrid.CurrentRow.Tag as VideoChoice; };
             body.Controls.Add(formatsGrid, 0, 1);
+            NativeDarkTheme.ApplyScrollBarsOnHandleCreated(formatsGrid, "DarkMode_Explorer");
 
             var lower = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, BackColor = bg };
             lower.RowStyles.Add(new RowStyle(SizeType.Absolute, 40)); lower.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -123,15 +125,16 @@ namespace dotSharK
             lower.Controls.Add(pathRow, 0, 0);
             var logFrame = new Panel { Dock = DockStyle.Fill, BackColor = DarkPalette.Border, Padding = new Padding(1), Margin = Padding.Empty };
             logBox = InputBox(); logBox.Dock = DockStyle.Fill; logBox.Multiline = true; logBox.BorderStyle = BorderStyle.None; logBox.ScrollBars = ScrollBars.Vertical; logBox.ReadOnly = true; logBox.Font = new Font("Consolas", 8.5F); logBox.ForeColor = muted;
-            NativeDarkTheme.ApplyOnHandleCreated(logBox, "DarkMode_Explorer"); logFrame.Controls.Add(logBox);
+            NativeDarkTheme.ApplyOnHandleCreated(logBox, "DarkMode_Explorer"); NativeDarkTheme.ApplyScrollBarsOnHandleCreated(logBox, "DarkMode_Explorer"); logFrame.Controls.Add(logBox);
             lower.Controls.Add(logFrame, 0, 1); body.Controls.Add(lower, 0, 2); root.Controls.Add(body, 0, 3);
             NativeDarkTheme.ApplyOnHandleCreated(formatsGrid, "DarkMode_Explorer");
 
-            var footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, BackColor = bg, Padding = new Padding(0, 8, 0, 0) };
+            var footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, BackColor = bg, Padding = Padding.Empty };
             footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 176)); footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 136));
             stateLabel = new Label { Text = "就绪", Dock = DockStyle.Fill, ForeColor = muted, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
-            progress = new ProgressBar { Dock = DockStyle.Fill, Style = ProgressBarStyle.Marquee, MarqueeAnimationSpeed = 24, Visible = false, Margin = new Padding(4, 10, 16, 10) };
-            downloadButton = AccentButton("下载"); downloadButton.Dock = DockStyle.Fill; downloadButton.Margin = new Padding(0, 11, 0, 11); downloadButton.Enabled = false; downloadButton.Click += async (s, e) => await Download();
+            progress = new DarkProgressBar { Height = 8, Anchor = AnchorStyles.Left | AnchorStyles.Right, Visible = false, Margin = new Padding(4, 0, 16, 0) };
+            stateLabel.Height = DarkPalette.ControlHeight; stateLabel.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom; stateLabel.Margin = Padding.Empty;
+            downloadButton = AccentButton("下载"); downloadButton.Height = DarkPalette.ControlHeight; downloadButton.Dock = DockStyle.None; downloadButton.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom; downloadButton.Margin = Padding.Empty; downloadButton.Enabled = false; downloadButton.Click += async (s, e) => await Download();
             footer.Controls.Add(stateLabel, 0, 0); footer.Controls.Add(progress, 1, 0); footer.Controls.Add(downloadButton, 2, 0); root.Controls.Add(footer, 0, 4);
             AcceptButton = analyzeButton;
         }

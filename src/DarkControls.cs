@@ -14,9 +14,11 @@ namespace dotSharK
         internal static readonly Color Field = Color.FromArgb(51, 51, 51);
         internal static readonly Color Foreground = Color.FromArgb(235, 238, 240);
         internal static readonly Color Muted = Color.FromArgb(153, 163, 170);
-        internal static readonly Color Accent = Color.FromArgb(96, 185, 28);
+        internal static readonly Color Accent = Color.FromArgb(37, 116, 91);
+        internal static readonly Color Selection = Color.FromArgb(44, 65, 57);
+        internal static readonly Color ProgressTrack = Color.FromArgb(49, 53, 56);
         internal static readonly Color Border = Color.FromArgb(65, 65, 65);
-        internal static readonly Color Focus = Color.FromArgb(96, 185, 28);
+        internal static readonly Color Focus = Color.FromArgb(37, 116, 91);
     }
 
     internal static class NativeDarkTheme
@@ -35,6 +37,26 @@ namespace dotSharK
             control.HandleCreated += (s, e) => Apply((Control)s, theme);
             if (control.IsHandleCreated) Apply(control, theme);
         }
+        internal static void ApplyScrollBarsOnHandleCreated(Control parent, string theme)
+        {
+            if (parent == null) return;
+            Action applyChildren = null;
+            applyChildren = () =>
+            {
+                foreach (Control child in parent.Controls)
+                {
+                    if (child is ScrollBar) ApplyOnHandleCreated(child, theme);
+                    if (child.HasChildren) ApplyScrollBarsOnHandleCreated(child, theme);
+                }
+            };
+            parent.HandleCreated += (s, e) => applyChildren();
+            parent.ControlAdded += (s, e) =>
+            {
+                if (e.Control is ScrollBar) ApplyOnHandleCreated(e.Control, theme);
+                if (e.Control.HasChildren) ApplyScrollBarsOnHandleCreated(e.Control, theme);
+            };
+            if (parent.IsHandleCreated) applyChildren();
+        }
     }
 
     internal sealed class DarkButton : Button
@@ -49,8 +71,51 @@ namespace dotSharK
             ForeColor = DarkPalette.Foreground;
             FlatAppearance.BorderSize = Primary ? 0 : 1;
             FlatAppearance.BorderColor = DarkPalette.Border;
-            FlatAppearance.MouseOverBackColor = Primary ? Color.FromArgb(111, 202, 40) : Color.FromArgb(55, 55, 55);
-            FlatAppearance.MouseDownBackColor = Primary ? Color.FromArgb(79, 158, 22) : Color.FromArgb(47, 47, 47);
+            FlatAppearance.MouseOverBackColor = Primary ? ControlPaint.Light(DarkPalette.Accent, 0.16F) : Color.FromArgb(55, 55, 55);
+            FlatAppearance.MouseDownBackColor = Primary ? ControlPaint.Dark(DarkPalette.Accent, 0.16F) : Color.FromArgb(47, 47, 47);
+        }
+    }
+
+    internal sealed class DarkProgressBar : Control
+    {
+        private readonly Timer animationTimer;
+        private int segmentX = -1;
+        private int SegmentWidth { get { return Math.Min(72, Math.Max(20, Width / 4)); } }
+
+        internal DarkProgressBar()
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            BackColor = DarkPalette.ProgressTrack; Height = 8; Margin = Padding.Empty;
+            animationTimer = new Timer { Interval = 40 };
+            animationTimer.Tick += (s, e) =>
+            {
+                if (Width <= 0) return;
+                segmentX += 5;
+                if (segmentX > Width) segmentX = -SegmentWidth;
+                Invalidate();
+            };
+            VisibleChanged += (s, e) => UpdateAnimation();
+        }
+
+        protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e); UpdateAnimation(); }
+        protected override void OnPaintBackground(PaintEventArgs e) { e.Graphics.Clear(DarkPalette.ProgressTrack); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            if (!Visible || Width <= 0 || Height <= 0) return;
+            Rectangle chunk = new Rectangle(segmentX, 0, SegmentWidth, Height);
+            chunk.Intersect(ClientRectangle);
+            if (chunk.Width > 0) using (Brush brush = new SolidBrush(DarkPalette.Accent)) e.Graphics.FillRectangle(brush, chunk);
+        }
+        private void UpdateAnimation()
+        {
+            if (IsHandleCreated && Visible) animationTimer.Start();
+            else animationTimer.Stop();
+            Invalidate();
+        }
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) animationTimer.Dispose();
+            base.Dispose(disposing);
         }
     }
 
@@ -334,7 +399,7 @@ namespace dotSharK
         {
             if (e.Index < 0 || e.Index >= list.Items.Count) return;
             bool active = (e.State & DrawItemState.Selected) != 0;
-            using (Brush b = new SolidBrush(active ? Color.FromArgb(54, 78, 42) : DarkPalette.Field)) e.Graphics.FillRectangle(b, e.Bounds);
+            using (Brush b = new SolidBrush(active ? DarkPalette.Selection : DarkPalette.Field)) e.Graphics.FillRectangle(b, e.Bounds);
             TextRenderer.DrawText(e.Graphics, Display(list.Items[e.Index]), Font, Rectangle.Inflate(e.Bounds, -8, 0), DarkPalette.Foreground, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
         }
         private void TogglePopup()

@@ -14,7 +14,7 @@ namespace dotSharK
 {
     internal sealed class ConfigurationDialog : DarkSettingsForm
     {
-        private readonly Color bg = Color.FromArgb(34, 34, 34), panel = Color.FromArgb(43, 43, 43), field = Color.FromArgb(51, 51, 51), green = Color.FromArgb(96, 185, 28), fg = Color.FromArgb(235, 238, 240), muted = Color.FromArgb(153, 163, 170);
+        private readonly Color bg = Color.FromArgb(34, 34, 34), panel = Color.FromArgb(43, 43, 43), field = Color.FromArgb(51, 51, 51), green = DarkPalette.Accent, fg = Color.FromArgb(235, 238, 240), muted = Color.FromArgb(153, 163, 170);
         private readonly TextBox[] toolPaths = new TextBox[4];
         private readonly string[] toolNames = { "yt-dlp.exe", "ffmpeg.exe", "ffprobe.exe", "deno.exe" };
         private TextBox proxyBox, profileRootBox, cookieFileBox;
