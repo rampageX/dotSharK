@@ -4,26 +4,32 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Text.RegularExpressions;
+using System.Threading;
 
 namespace dotSharK
 {
     internal sealed class MainForm : Form
     {
-        private readonly Color bg = Color.FromArgb(34, 34, 34), panel = Color.FromArgb(43, 43, 43), field = Color.FromArgb(51, 51, 51), green = DarkPalette.Accent, muted = Color.FromArgb(153, 163, 170), fg = Color.FromArgb(235, 238, 240), line = Color.FromArgb(65, 65, 65);
+        private readonly Color bg = Color.FromArgb(34, 34, 34), panel = Color.FromArgb(43, 43, 43), green = DarkPalette.Accent, muted = Color.FromArgb(153, 163, 170), fg = Color.FromArgb(235, 238, 240), line = Color.FromArgb(65, 65, 65);
         private DarkTextBox urlBox, folderBox, logBox;
         private Button analyzeButton, downloadButton, configButton, browseFolderButton;
-        private DarkComboBox modeBox, containerBox, audioBox, subtitleBox;
-        private DataGridView formatsGrid;
-        private Label titleLabel, detailsLabel, stateLabel;
+        private Button removeQueueButton, clearFinishedButton, retryFailedButton;
+        private DataGridView queueGrid;
+        private Label stateLabel, queueCountLabel;
         private DarkProgressBar progress;
-        private MediaInfo current;
-        private VideoChoice selectedVideo;
-        private AudioChoice selectedAudio;
-        private SubtitleChoice selectedSubtitle;
+        private readonly List<DownloadQueueItem> queueItems = new List<DownloadQueueItem>();
         private YtDlpClient client;
         private YtDlpOptions ytdlpOptions = new YtDlpOptions();
         private string ytDlpPath = "", ffmpegPath = "", ffprobePath = "", denoPath = "";
         private bool loadingSettings;
+        private bool downloadRunning;
+        private bool queueStopRequested;
+        private CancellationTokenSource queueCancellation;
+        private readonly Dictionary<DownloadQueueItem, double> currentRunProgress = new Dictionary<DownloadQueueItem, double>();
+        private List<DownloadQueueItem> currentRunItems = new List<DownloadQueueItem>();
         private readonly string settingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "dotSharK.ini");
 
         public MainForm()
@@ -42,7 +48,7 @@ namespace dotSharK
         private void BuildUi()
         {
             var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(22, 16, 22, 18), BackColor = bg };
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 118)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 29));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 151)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 29));
             Controls.Add(root);
 
             var brand = new Panel { Dock = DockStyle.Fill };
@@ -62,91 +68,69 @@ namespace dotSharK
             entry.Controls.Add(urlBox, 0, 0); entry.Controls.Add(analyzeButton, 1, 0);
             root.Controls.Add(entry, 0, 1);
 
-            var metadata = new Panel { Dock = DockStyle.Fill, BackColor = panel, Padding = new Padding(16, 12, 16, 10) };
-            titleLabel = new Label { Text = "等待分析视频", Dock = DockStyle.Top, Height = 27, Font = new Font(Font.FontFamily, 12F, FontStyle.Bold), ForeColor = fg, AutoEllipsis = true };
-            detailsLabel = new Label { Text = "解析后会显示标题、时长、分辨率、编码、动态范围、帧率与字幕信息。", Dock = DockStyle.Fill, ForeColor = muted, AutoEllipsis = true };
-            metadata.Controls.Add(detailsLabel); metadata.Controls.Add(titleLabel); root.Controls.Add(metadata, 0, 2);
-
-            var body = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, BackColor = bg, Padding = new Padding(0, 10, 0, 0) };
-            body.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); body.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); body.RowStyles.Add(new RowStyle(SizeType.Absolute, 136));
-            var settings = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 8, RowCount = 1, BackColor = bg, Padding = new Padding(0, 9, 0, 9) };
-            float[] widths = { 6, 18, 6, 18, 7, 22, 7, 16 };
-            foreach (float width in widths) settings.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, width));
-            settings.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            modeBox = DropDown(new[] { "视频", "仅音频" }); containerBox = DropDown(new[] { "MKV", "MP4", "WebM" });
-            audioBox = DropDown(new[] { "默认音轨" }); subtitleBox = DropDown(new[] { "不下载字幕" });
-            AddSetting(settings, 0, "下载"); AddSetting(settings, 2, "容器"); AddSetting(settings, 4, "音轨"); AddSetting(settings, 6, "字幕");
-            settings.Controls.Add(modeBox, 1, 0); settings.Controls.Add(containerBox, 3, 0); settings.Controls.Add(audioBox, 5, 0); settings.Controls.Add(subtitleBox, 7, 0);
-            modeBox.SelectedIndexChanged += (s, e) => UpdateMode(); subtitleBox.SelectedIndexChanged += (s, e) => { selectedSubtitle = subtitleBox.SelectedItem as SubtitleChoice; };
-            body.Controls.Add(settings, 0, 0);
-
-            formatsGrid = new DataGridView { Dock = DockStyle.Fill, BackgroundColor = panel, BorderStyle = BorderStyle.None, GridColor = line, AllowUserToAddRows = false, AllowUserToDeleteRows = false, AllowUserToResizeRows = false, ReadOnly = true, MultiSelect = false, SelectionMode = DataGridViewSelectionMode.FullRowSelect, RowHeadersVisible = false, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill, EnableHeadersVisualStyles = false, ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None, RowHeadersBorderStyle = DataGridViewHeaderBorderStyle.None, CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal, ColumnHeadersHeight = 34, RowTemplate = { Height = 40 }, Visible = true };
-            formatsGrid.AdvancedColumnHeadersBorderStyle.All = DataGridViewAdvancedCellBorderStyle.None;
-            formatsGrid.ColumnHeadersDefaultCellStyle.BackColor = panel; formatsGrid.ColumnHeadersDefaultCellStyle.ForeColor = muted; formatsGrid.ColumnHeadersDefaultCellStyle.SelectionBackColor = panel;
-            formatsGrid.DefaultCellStyle.BackColor = panel; formatsGrid.DefaultCellStyle.ForeColor = fg; formatsGrid.DefaultCellStyle.SelectionBackColor = DarkPalette.Selection; formatsGrid.DefaultCellStyle.SelectionForeColor = fg; formatsGrid.DefaultCellStyle.Padding = new Padding(8, 0, 8, 0);
-            formatsGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "resolution", HeaderText = "分辨率", FillWeight = 24 });
-            formatsGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "codec", HeaderText = "编码 / HDR", FillWeight = 33 });
-            formatsGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "fps", HeaderText = "帧率", FillWeight = 16 });
-            formatsGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "container", HeaderText = "源格式", FillWeight = 15 });
-            formatsGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "size", HeaderText = "估算大小", FillWeight = 22 });
-            formatsGrid.CellPainting += (s, e) =>
+            var queueArea = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, BackColor = bg, Padding = new Padding(0, 8, 0, 1), Margin = Padding.Empty };
+            queueArea.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); queueArea.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            var queueToolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, BackColor = bg };
+            queueToolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); queueToolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128)); queueToolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104)); queueToolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
+            queueCountLabel = new Label { Text = "下载队列（0）", Dock = DockStyle.Fill, ForeColor = fg, Font = new Font(Font, FontStyle.Bold), TextAlign = ContentAlignment.MiddleLeft };
+            retryFailedButton = GhostButton("重试所有失败", 128); retryFailedButton.Dock = DockStyle.Fill; retryFailedButton.Click += async (s, e) => await RetryAllFailed();
+            removeQueueButton = GhostButton("移除选中", 104); removeQueueButton.Dock = DockStyle.Fill; removeQueueButton.Click += (s, e) => RemoveSelectedQueueItems();
+            clearFinishedButton = GhostButton("清理已完成", 112); clearFinishedButton.Dock = DockStyle.Fill; clearFinishedButton.Click += (s, e) => ClearFinishedQueueItems();
+            queueToolbar.Controls.Add(queueCountLabel, 0, 0); queueToolbar.Controls.Add(retryFailedButton, 1, 0); queueToolbar.Controls.Add(removeQueueButton, 2, 0); queueToolbar.Controls.Add(clearFinishedButton, 3, 0);
+            queueArea.Controls.Add(queueToolbar, 0, 0);
+            queueGrid = new DataGridView { Dock = DockStyle.Fill, BackgroundColor = panel, BorderStyle = BorderStyle.None, GridColor = line, AllowUserToAddRows = false, AllowUserToDeleteRows = false, AllowUserToResizeRows = false, ReadOnly = true, MultiSelect = true, SelectionMode = DataGridViewSelectionMode.FullRowSelect, RowHeadersVisible = false, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill, EnableHeadersVisualStyles = false, ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None, CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal, ColumnHeadersHeight = 34, RowTemplate = { Height = 36 }, Margin = Padding.Empty };
+            queueGrid.AdvancedColumnHeadersBorderStyle.All = DataGridViewAdvancedCellBorderStyle.None;
+            queueGrid.ColumnHeadersDefaultCellStyle.BackColor = panel; queueGrid.ColumnHeadersDefaultCellStyle.ForeColor = muted; queueGrid.ColumnHeadersDefaultCellStyle.SelectionBackColor = panel;
+            queueGrid.DefaultCellStyle.BackColor = panel; queueGrid.DefaultCellStyle.ForeColor = fg; queueGrid.DefaultCellStyle.SelectionBackColor = DarkPalette.Selection; queueGrid.DefaultCellStyle.SelectionForeColor = fg; queueGrid.DefaultCellStyle.Padding = new Padding(8, 0, 8, 0);
+            queueGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "title", HeaderText = "视频", FillWeight = 62 });
+            queueGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "source", HeaderText = "来源", FillWeight = 13 });
+            queueGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "quality", HeaderText = "质量方案", FillWeight = 16 });
+            queueGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "status", HeaderText = "状态", FillWeight = 9 });
+            queueGrid.SelectionChanged += (s, e) => UpdateQueueControls();
+            var queueMenu = new ContextMenuStrip { BackColor = DarkPalette.Surface, ForeColor = fg, ShowImageMargin = false, Renderer = new DarkContextMenuRenderer() };
+            var retryOneMenuItem = new ToolStripMenuItem("重试此项");
+            queueMenu.Items.Add(retryOneMenuItem);
+            DownloadQueueItem contextItem = null;
+            queueGrid.CellMouseDown += (s, e) =>
             {
-                if (e.RowIndex != -1 || e.ColumnIndex < 0) return;
-                using (var brush = new SolidBrush(panel)) e.Graphics.FillRectangle(brush, e.CellBounds);
-                bool sorted = formatsGrid.SortedColumn == formatsGrid.Columns[e.ColumnIndex] && formatsGrid.SortOrder != SortOrder.None;
-                Rectangle textBounds = Rectangle.Inflate(e.CellBounds, -9, 0); if (sorted) textBounds.Width -= 16;
-                TextRenderer.DrawText(e.Graphics, Convert.ToString(e.FormattedValue), formatsGrid.ColumnHeadersDefaultCellStyle.Font ?? formatsGrid.Font,
-                    textBounds, muted, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
-                using (var pen = new Pen(line))
+                if (e.Button == MouseButtons.Right)
                 {
-                    e.Graphics.DrawLine(pen, e.CellBounds.Left, e.CellBounds.Bottom - 1, e.CellBounds.Right - 1, e.CellBounds.Bottom - 1);
-                    e.Graphics.DrawLine(pen, e.CellBounds.Right - 1, e.CellBounds.Top + 6, e.CellBounds.Right - 1, e.CellBounds.Bottom - 6);
+                    contextItem = null;
+                    if (e.RowIndex >= 0)
+                    {
+                        queueGrid.ClearSelection(); queueGrid.Rows[e.RowIndex].Selected = true;
+                        contextItem = queueGrid.Rows[e.RowIndex].Tag as DownloadQueueItem;
+                    }
+                    retryOneMenuItem.Enabled = !downloadRunning && contextItem != null && contextItem.Status == "失败";
                 }
-                if (sorted)
-                {
-                    int x = e.CellBounds.Right - 13, y = e.CellBounds.Top + e.CellBounds.Height / 2;
-                    Point[] glyph = formatsGrid.SortOrder == SortOrder.Ascending ? new[] { new Point(x - 4, y + 2), new Point(x + 4, y + 2), new Point(x, y - 2) } : new[] { new Point(x - 4, y - 2), new Point(x + 4, y - 2), new Point(x, y + 2) };
-                    using (var brush = new SolidBrush(muted)) e.Graphics.FillPolygon(brush, glyph);
-                }
-                e.Handled = true;
             };
-            formatsGrid.CellClick += (s, e) => { if (e.RowIndex >= 0) selectedVideo = formatsGrid.Rows[e.RowIndex].Tag as VideoChoice; };
-            formatsGrid.SelectionChanged += (s, e) => { if (formatsGrid.CurrentRow != null) selectedVideo = formatsGrid.CurrentRow.Tag as VideoChoice; };
-            body.Controls.Add(formatsGrid, 0, 1);
-            NativeDarkTheme.ApplyScrollBarsOnHandleCreated(formatsGrid, "DarkMode_Explorer");
+            retryOneMenuItem.Click += async (s, e) => { if (contextItem != null && contextItem.Status == "失败" && ValidProxy()) { contextItem.Status = "等待中"; UpdateQueueRow(contextItem); UpdateQueueControls(); await DownloadQueue(); } };
+            queueGrid.ContextMenuStrip = queueMenu;
+            queueArea.Controls.Add(queueGrid, 0, 1); root.Controls.Add(queueArea, 0, 2);
+            NativeDarkTheme.ApplyOnHandleCreated(queueGrid, "DarkMode_Explorer"); NativeDarkTheme.ApplyScrollBarsOnHandleCreated(queueGrid, "DarkMode_Explorer");
 
-            var lower = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, BackColor = bg };
-            lower.RowStyles.Add(new RowStyle(SizeType.Absolute, 40)); lower.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            var pathRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, BackColor = bg };
+            var lower = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, BackColor = bg, Padding = Padding.Empty, Margin = Padding.Empty };
+            lower.RowStyles.Add(new RowStyle(SizeType.Absolute, 43)); lower.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            var pathRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, BackColor = bg, Padding = new Padding(0, 9, 0, 10), Margin = Padding.Empty };
             pathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 66)); pathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); pathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
             pathRow.Controls.Add(new Label { Text = "保存到", ForeColor = muted, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
-            folderBox = InputBox(); folderBox.Dock = DockStyle.Fill; folderBox.Margin = new Padding(0, 8, 0, 0); folderBox.TextChanged += (s, e) => SaveSettings(); pathRow.Controls.Add(folderBox, 1, 0);
-            browseFolderButton = GhostButton("浏览…", 90); browseFolderButton.Dock = DockStyle.Fill; browseFolderButton.Margin = new Padding(0, 8, 0, 0); browseFolderButton.Click += BrowseFolder; pathRow.Controls.Add(browseFolderButton, 2, 0);
+            folderBox = InputBox(); folderBox.Dock = DockStyle.Fill; folderBox.Margin = Padding.Empty; folderBox.TextChanged += (s, e) => SaveSettings(); pathRow.Controls.Add(folderBox, 1, 0);
+            browseFolderButton = GhostButton("浏览…", 90); browseFolderButton.Dock = DockStyle.Fill; browseFolderButton.Margin = Padding.Empty; browseFolderButton.Click += BrowseFolder; pathRow.Controls.Add(browseFolderButton, 2, 0);
             lower.Controls.Add(pathRow, 0, 0);
             var logFrame = new Panel { Dock = DockStyle.Fill, BackColor = DarkPalette.Border, Padding = new Padding(1), Margin = Padding.Empty };
             logBox = InputBox(); logBox.Dock = DockStyle.Fill; logBox.Multiline = true; logBox.BorderStyle = BorderStyle.None; logBox.ScrollBars = ScrollBars.Vertical; logBox.ReadOnly = true; logBox.Font = new Font("Consolas", 8.5F); logBox.ForeColor = muted;
             NativeDarkTheme.ApplyOnHandleCreated(logBox, "DarkMode_Explorer"); NativeDarkTheme.ApplyScrollBarsOnHandleCreated(logBox, "DarkMode_Explorer"); logFrame.Controls.Add(logBox);
-            lower.Controls.Add(logFrame, 0, 1); body.Controls.Add(lower, 0, 2); root.Controls.Add(body, 0, 3);
-            NativeDarkTheme.ApplyOnHandleCreated(formatsGrid, "DarkMode_Explorer");
+            lower.Controls.Add(logFrame, 0, 1); root.Controls.Add(lower, 0, 3);
 
             var footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, BackColor = bg, Padding = Padding.Empty };
             footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 176)); footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 136));
             stateLabel = new Label { Text = "就绪", Dock = DockStyle.Fill, ForeColor = muted, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
             progress = new DarkProgressBar { Height = 8, Anchor = AnchorStyles.Left | AnchorStyles.Right, Visible = false, Margin = new Padding(4, 0, 16, 0) };
             stateLabel.Height = DarkPalette.ControlHeight; stateLabel.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom; stateLabel.Margin = Padding.Empty;
-            downloadButton = AccentButton("下载"); downloadButton.Height = DarkPalette.ControlHeight; downloadButton.Dock = DockStyle.None; downloadButton.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom; downloadButton.Margin = Padding.Empty; downloadButton.Enabled = false; downloadButton.Click += async (s, e) => await Download();
+            downloadButton = AccentButton("开始队列"); downloadButton.Height = DarkPalette.ControlHeight; downloadButton.Dock = DockStyle.None; downloadButton.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom; downloadButton.Margin = Padding.Empty; downloadButton.Enabled = false;
+            downloadButton.Click += async (s, e) => { if (downloadRunning) StopQueue(); else await DownloadQueue(); };
             footer.Controls.Add(stateLabel, 0, 0); footer.Controls.Add(progress, 1, 0); footer.Controls.Add(downloadButton, 2, 0); root.Controls.Add(footer, 0, 4);
             AcceptButton = analyzeButton;
-        }
-
-        private static void AddSetting(TableLayoutPanel row, int column, string label)
-        {
-            row.Controls.Add(new Label { Text = label, ForeColor = DarkPalette.Muted, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true, Margin = new Padding(0, 0, 4, 0) }, column, 0);
-        }
-        private DarkComboBox DropDown(string[] values)
-        {
-            var c = new DarkComboBox { Dock = DockStyle.Fill, Height = DarkPalette.ControlHeight, Margin = new Padding(0, 0, 8, 0) };
-            c.Items.AddRange(values.Cast<object>().ToArray()); c.SelectedIndex = 0; return c;
         }
         private DarkTextBox InputBox() { return new DarkTextBox { Font = new Font(Font.FontFamily, 9F), AutoSize = false, Height = DarkPalette.ControlHeight, Margin = Padding.Empty }; }
         private DarkButton AccentButton(string text) { return new DarkButton { Text = text, Primary = true, Font = new Font(Font.FontFamily, 9F, FontStyle.Bold), Height = DarkPalette.ControlHeight, MinimumSize = new Size(0, DarkPalette.ControlHeight) }; }
@@ -157,78 +141,321 @@ namespace dotSharK
             if (client == null) { OpenConfiguration(this, EventArgs.Empty); if (client == null) return; }
             if (String.IsNullOrWhiteSpace(urlBox.Text)) { SetState("请先粘贴视频网址。"); return; }
             if (!ValidProxy()) return;
-            Busy(true, "正在解析视频信息…"); formatsGrid.Rows.Clear(); logBox.Clear(); downloadButton.Enabled = false;
+            string url = urlBox.Text.Trim();
+            Busy(true, "正在识别视频或播放列表…"); logBox.Clear(); analyzeButton.Enabled = false;
             try
             {
-                current = await client.AnalyzeAsync(urlBox.Text.Trim(), ytdlpOptions);
-                titleLabel.Text = String.IsNullOrWhiteSpace(current.Title) ? "未获取到标题" : current.Title;
-                detailsLabel.Text = String.Format("时长  {0}     可用视频选项  {1}     音轨  {2}     字幕  {3}（含自动字幕）",
-                    TimeSpan.FromSeconds(Math.Max(0, current.Duration)).ToString(current.Duration >= 3600 ? @"h\:mm\:ss" : @"mm\:ss"), current.VideoChoices.Count, current.AudioChoices.Count, current.Subtitles.Count);
-                foreach (var v in current.VideoChoices)
+                LinkInspection inspection = await client.InspectAsync(url, ytdlpOptions);
+                if (inspection.IsPlaylist)
                 {
-                    int i = formatsGrid.Rows.Add(v.Height + "p", v.Codec + (v.DynamicRange == "SDR" ? "" : "  ·  " + v.DynamicRange), v.Fps > 0 ? v.Fps.ToString("0.##") + " fps" : "—", v.Container.ToUpperInvariant(), YtDlpClient.FormatBytes(v.ApproxBytes));
-                    formatsGrid.Rows[i].Tag = v;
+                    Busy(false, "");
+                    using (var choice = new PlaylistChoiceDialog(inspection.Playlist.Title, inspection.Playlist.Entries.Count))
+                    {
+                        if (choice.ShowDialog(this) == DialogResult.OK)
+                        {
+                            if (choice.DownloadPlaylist) await AnalyzePlaylist(inspection.Playlist);
+                            else await AnalyzeSingle(GetSingleVideoTarget(url, inspection.Playlist));
+                        }
+                    }
                 }
-                if (formatsGrid.Rows.Count > 0) { formatsGrid.Rows[0].Selected = true; selectedVideo = formatsGrid.Rows[0].Tag as VideoChoice; }
-                RefreshChoices();
-                if (String.IsNullOrWhiteSpace(current.Title)) throw new InvalidOperationException("链接已响应，但未返回标题。请查看详情并检查链接。");
-                downloadButton.Enabled = formatsGrid.Rows.Count > 0 || current.AudioChoices.Count > 0;
-                SetState("解析完成 · 同一分辨率的不同视频编码会分别列出。" + (String.IsNullOrWhiteSpace(ytdlpOptions.Proxy) ? "" : " 代理已启用。"));
+                else await AnalyzeSingle(url, inspection.Media);
             }
-            catch (Exception ex) { titleLabel.Text = "解析失败"; detailsLabel.Text = ex.Message; SetState("解析失败 · 查看详情"); logBox.Text = ex.Message; }
-            finally { Busy(false, stateLabel.Text); }
+            catch (Exception ex) { SetState("解析失败 · 查看详情"); logBox.Text = ex.Message; }
+            finally { analyzeButton.Enabled = true; Busy(false, stateLabel.Text); UpdateQueueControls(); }
         }
 
-        private void RefreshChoices()
+        private async Task AnalyzeSingle(string url, MediaInfo inspected = null)
         {
-            audioBox.Items.Clear(); audioBox.Items.Add("默认音轨");
-            if (current != null) foreach (var a in current.AudioChoices) audioBox.Items.Add(a);
-            audioBox.SelectedIndex = 0; selectedAudio = null;
-            subtitleBox.Items.Clear(); subtitleBox.Items.Add("不下载字幕");
-            if (current != null) foreach (var sub in current.Subtitles) subtitleBox.Items.Add(sub);
-            subtitleBox.SelectedIndex = 0; selectedSubtitle = null;
-        }
-        private void UpdateMode()
-        {
-            bool audioOnly = modeBox.SelectedIndex == 1;
-            formatsGrid.Enabled = !audioOnly;
-            if (audioBox != null) { audioBox.SelectedItem = "默认音轨"; }
+            Busy(true, "正在解析单个视频的格式…");
+            MediaInfo media = inspected ?? await client.AnalyzeAsync(url, ytdlpOptions);
+            if (String.IsNullOrWhiteSpace(media.Title)) throw new InvalidOperationException("链接已响应，但未返回标题。");
+            Busy(false, "");
+            using (var dialog = new SingleVideoDialog(media))
+            {
+                if (dialog.ShowDialog(this) != DialogResult.OK) { SetState("已取消选择。"); return; }
+                AddQueueItem(new DownloadQueueItem
+                {
+                    Title = media.Title, Url = String.IsNullOrWhiteSpace(media.WebpageUrl) ? url : media.WebpageUrl,
+                    Media = media, Video = dialog.Video, Audio = dialog.Audio, Subtitle = dialog.Subtitle,
+                    AudioOnly = dialog.AudioOnly, Container = dialog.OutputContainer, OutputFolder = GetOutputFolder(),
+                    ProgressWeight = media.Duration > 0 ? media.Duration : 1, Status = "等待中"
+                });
+            }
+            SetState("已加入队列 · " + media.Title);
         }
 
-        private async Task Download()
+        private async Task AnalyzePlaylist(PlaylistInfo playlist)
         {
-            if (current == null || !ValidProxy()) return;
-            string folder = folderBox.Text.Trim(); if (folder.Length == 0) folder = Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
-            try { Directory.CreateDirectory(folder); } catch (Exception ex) { SetState("保存目录不可用：" + ex.Message); return; }
-            bool onlyAudio = modeBox.SelectedIndex == 1;
-            if (!onlyAudio && selectedVideo == null) { SetState("请选择一个视频格式。"); return; }
-            selectedAudio = audioBox.SelectedItem as AudioChoice;
-            selectedSubtitle = subtitleBox.SelectedItem as SubtitleChoice;
-            var selectedContainer = containerBox.SelectedItem.ToString();
-            Busy(true, "正在下载…"); logBox.Clear(); downloadButton.Enabled = false;
+            if (playlist.Entries.Count == 0) throw new InvalidOperationException("播放列表里没有可下载的视频。");
+            Busy(true, "正在分析播放列表质量选项…");
+            MediaInfo sample = await client.AnalyzeAsync(playlist.Entries[0].Url, ytdlpOptions);
+            Busy(false, "");
+            string playlistFolder = Path.Combine(GetOutputFolder(), SafeFolderName(playlist.Title));
+            using (var dialog = new PlaylistSelectionDialog(playlist, sample, playlistFolder))
+            {
+                if (dialog.ShowDialog(this) != DialogResult.OK) { SetState("已取消选择播放列表。"); return; }
+                foreach (var item in dialog.QueueItems) AddQueueItem(item);
+                SetState(String.Format("已加入队列 · {0} 个视频", dialog.QueueItems.Count));
+            }
+        }
+
+        private async Task DownloadQueue()
+        {
+            if (downloadRunning || !queueItems.Any(x => x.Status == "等待中" || x.Status == "已取消") || !ValidProxy()) return;
+            foreach (var item in queueItems.Where(x => x.Status == "已取消")) { item.Status = "等待中"; UpdateQueueRow(item); }
+            downloadRunning = true; queueStopRequested = false; queueCancellation = new CancellationTokenSource();
+            CancellationToken cancellationToken = queueCancellation.Token;
+            analyzeButton.Enabled = false; progress.SetProgress(0); progress.SetIndeterminate(false); progress.Visible = true; logBox.Clear();
+            UpdateQueueControls();
+            AppendLog(String.Format("[设置] 忽略 yt-dlp.conf；主代理 {0}；地域验证代理 {1}；分片并发 {2}；同时下载 {3}",
+                ProxySummary(ytdlpOptions.Proxy), ProxySummary(ytdlpOptions.GeoVerificationProxy), ytdlpOptions.ConcurrentFragments, Math.Max(1, Math.Min(6, ytdlpOptions.ConcurrentDownloads))));
             try
             {
-                await client.DownloadAsync(current, selectedVideo, selectedAudio, onlyAudio, selectedContainer, folder, selectedSubtitle, ytdlpOptions, lineText =>
-                { if (!IsDisposed && IsHandleCreated) BeginInvoke((Action)(() => { logBox.AppendText(lineText + Environment.NewLine); logBox.SelectionStart = logBox.TextLength; logBox.ScrollToCaret(); })); });
-                SetState("下载完成 · " + folder);
+                var pending = queueItems.Where(x => x.Status == "等待中").ToList();
+                currentRunItems = pending;
+                currentRunProgress.Clear();
+                foreach (var item in pending) currentRunProgress[item] = 0;
+                UpdateQueueProgressDisplay(null, 0);
+                using (var slots = new System.Threading.SemaphoreSlim(Math.Max(1, Math.Min(6, ytdlpOptions.ConcurrentDownloads))))
+                {
+                    await Task.WhenAll(pending.Select(async item =>
+                    {
+                        bool acquired = false;
+                        try
+                        {
+                            await slots.WaitAsync(cancellationToken);
+                            acquired = true;
+                            cancellationToken.ThrowIfCancellationRequested();
+                            item.Status = "下载中"; UpdateQueueRow(item); SetState(String.Format("正在下载 · {0}", item.Title));
+                            AppendLog("[队列] " + item.Title);
+                            try
+                            {
+                                Directory.CreateDirectory(item.OutputFolder);
+                                var itemProgress = new ItemDownloadProgress();
+                                Action<string> output = lineText =>
+                                {
+                                    AppendLog("[" + item.Title + "] " + lineText);
+                                    ReportDownloadLine(item, itemProgress, lineText);
+                                };
+                                if (item.PlaylistItem) await client.DownloadPlaylistItemAsync(item, ytdlpOptions, output, cancellationToken);
+                                else await client.DownloadAsync(item.Media, item.Video, item.Audio, item.AudioOnly, item.Container, item.OutputFolder, item.Subtitle, ytdlpOptions, output, cancellationToken);
+                                item.Status = "已完成";
+                                SetItemProgress(item, 1, 100);
+                            }
+                            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                            {
+                                item.Status = "已取消";
+                                AppendLog("[已停止] " + item.Title + " · 可继续下载");
+                            }
+                            catch (Exception ex) { item.Status = "失败"; AppendLog("[失败] " + item.Title + " · " + ex.Message); }
+                            UpdateQueueRow(item);
+                        }
+                        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                        {
+                            // Items that did not start remain queued for the next manual resume.
+                        }
+                        finally { if (acquired) slots.Release(); }
+                    }));
+                }
+                int failed = pending.Count(x => x.Status == "失败");
+                int completed = pending.Count(x => x.Status == "已完成");
+                int canceled = pending.Count(x => x.Status == "已取消");
+                if (cancellationToken.IsCancellationRequested)
+                    SetState(String.Format("队列已停止 · 完成 {0} · 已取消 {1} · 其余项目保留等待", completed, canceled));
+                else
+                    SetState(failed == 0 ? String.Format("队列下载完成 · {0} 个视频", completed) : String.Format("队列处理完成 · 成功 {0}，失败 {1}", completed, failed));
             }
-            catch (Exception ex) { SetState("下载失败"); logBox.AppendText(Environment.NewLine + ex.Message); }
-            finally { Busy(false, stateLabel.Text); downloadButton.Enabled = current != null; }
+            finally
+            {
+                downloadRunning = false; queueStopRequested = false; progress.Visible = false; currentRunItems.Clear(); currentRunProgress.Clear(); analyzeButton.Enabled = true;
+                if (queueCancellation != null) { queueCancellation.Dispose(); queueCancellation = null; }
+                UpdateQueueControls();
+            }
+        }
+
+        private void StopQueue()
+        {
+            if (!downloadRunning || queueStopRequested) return;
+            queueStopRequested = true;
+            SetState("正在停止队列…");
+            AppendLog("[队列] 收到停止请求，正在终止当前 yt-dlp 任务。");
+            UpdateQueueControls();
+            if (queueCancellation != null) queueCancellation.Cancel();
+        }
+
+        private async Task RetryAllFailed()
+        {
+            if (downloadRunning || !ValidProxy()) return;
+            foreach (var item in queueItems.Where(x => x.Status == "失败")) { item.Status = "等待中"; UpdateQueueRow(item); }
+            UpdateQueueControls();
+            await DownloadQueue();
+        }
+
+        private string GetOutputFolder() { string folder = folderBox.Text.Trim(); return folder.Length == 0 ? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Downloads") : folder; }
+        private static string SafeFolderName(string name)
+        {
+            if (String.IsNullOrWhiteSpace(name)) return "播放列表";
+            var invalid = new HashSet<char>(Path.GetInvalidFileNameChars());
+            var chars = name.Trim().Select(c => invalid.Contains(c) || c == '/' || c == '\\' ? '_' : c).ToArray();
+            string safe = new string(chars).Trim().TrimEnd('.');
+            if (safe.Length > 100) safe = safe.Substring(0, 100).TrimEnd(' ', '.');
+            return safe.Length == 0 ? "播放列表" : safe;
+        }
+
+        private sealed class ItemDownloadProgress
+        {
+            internal int StageCount = 1;
+            internal int StageIndex;
+            internal double LastPercent;
+            internal bool HasPercent;
+        }
+
+        private void ReportDownloadLine(DownloadQueueItem item, ItemDownloadProgress state, string lineText)
+        {
+            if (item == null || state == null || String.IsNullOrEmpty(lineText)) return;
+            var formatMatch = Regex.Match(lineText, @"Downloading\s+\d+\s+format\(s\):\s*(.+)$", RegexOptions.IgnoreCase);
+            if (formatMatch.Success) state.StageCount = Math.Max(1, formatMatch.Groups[1].Value.Count(c => c == '+') + 1);
+            var match = Regex.Match(lineText, @"(?:^|\s)(\d+(?:[.,]\d+)?)%\s+of\b", RegexOptions.IgnoreCase);
+            if (!match.Success) return;
+            double percent;
+            if (!Double.TryParse(match.Groups[1].Value.Replace(',', '.'), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out percent)) return;
+            if (state.HasPercent && percent + 5 < state.LastPercent && state.LastPercent >= 70 && state.StageIndex < state.StageCount - 1)
+                state.StageIndex++;
+            state.LastPercent = percent;
+            state.HasPercent = true;
+            double itemFraction = Math.Min(0.995, (state.StageIndex + Math.Max(0, Math.Min(100, percent)) / 100.0) / Math.Max(1, state.StageCount));
+            SetItemProgress(item, itemFraction, itemFraction * 100);
+        }
+
+        private void SetItemProgress(DownloadQueueItem item, double fraction, double itemPercent)
+        {
+            if (IsDisposed || !IsHandleCreated) return;
+            try
+            {
+                BeginInvoke((Action)(() =>
+                {
+                    if (IsDisposed || !currentRunProgress.ContainsKey(item)) return;
+                    currentRunProgress[item] = Math.Max(currentRunProgress[item], Math.Max(0, Math.Min(1, fraction)));
+                    UpdateQueueProgressDisplay(item, itemPercent);
+                }));
+            }
+            catch (InvalidOperationException) { }
+        }
+
+        private void UpdateQueueProgressDisplay(DownloadQueueItem current, double itemPercent)
+        {
+            double totalWeight = currentRunItems.Sum(x => Math.Max(1, x.ProgressWeight));
+            double completedWeight = currentRunItems.Sum(x => Math.Max(1, x.ProgressWeight) * (currentRunProgress.ContainsKey(x) ? currentRunProgress[x] : 0));
+            double queueFraction = totalWeight <= 0 ? 0 : completedWeight / totalWeight;
+            progress.SetProgress(queueFraction);
+            if (current != null)
+                SetState(String.Format("正在下载 · 视频 {0:0.#}% · 队列 {1:0.#}% · {2}", itemPercent, queueFraction * 100, current.Title));
+        }
+        private static string GetSingleVideoTarget(string url, PlaylistInfo playlist)
+        {
+            Uri uri;
+            if (Uri.TryCreate(url, UriKind.Absolute, out uri))
+            {
+                if (uri.Host.Equals("youtu.be", StringComparison.OrdinalIgnoreCase)) return url;
+                string query = uri.Query.TrimStart('?');
+                if (query.Split('&').Any(part => part.Split('=')[0].Equals("v", StringComparison.OrdinalIgnoreCase))) return url;
+            }
+            return playlist.Entries.Count == 0 ? url : playlist.Entries[0].Url;
+        }
+        private sealed class DarkContextMenuRenderer : ToolStripProfessionalRenderer
+        {
+            internal DarkContextMenuRenderer() : base(new DarkContextMenuColors()) { RoundedEdges = false; }
+            protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
+            {
+                using (var pen = new Pen(DarkPalette.Border)) e.Graphics.DrawRectangle(pen, 0, 0, e.ToolStrip.Width - 1, e.ToolStrip.Height - 1);
+            }
+        }
+        private sealed class DarkContextMenuColors : ProfessionalColorTable
+        {
+            public override Color ToolStripDropDownBackground { get { return DarkPalette.Surface; } }
+            public override Color MenuBorder { get { return DarkPalette.Border; } }
+            public override Color MenuItemSelected { get { return DarkPalette.Selection; } }
+            public override Color ImageMarginGradientBegin { get { return DarkPalette.Surface; } }
+            public override Color ImageMarginGradientMiddle { get { return DarkPalette.Surface; } }
+            public override Color ImageMarginGradientEnd { get { return DarkPalette.Surface; } }
+        }
+        private void AddQueueItem(DownloadQueueItem item)
+        {
+            queueItems.Add(item);
+            string quality = item.AudioOnly ? "仅音频" : item.PlaylistItem
+                ? (item.TargetHeight > 0 ? item.TargetHeight + "p " + item.TargetCodec : "最高可用")
+                : (item.Video == null ? "自动" : item.Video.Label);
+            int row = queueGrid.Rows.Add(item.Title, item.PlaylistItem ? "播放列表" : "单视频", quality, item.Status);
+            queueGrid.Rows[row].Tag = item; queueCountLabel.Text = "下载队列（" + queueItems.Count + "）"; UpdateQueueControls();
+        }
+        private void UpdateQueueRow(DownloadQueueItem item)
+        {
+            foreach (DataGridViewRow row in queueGrid.Rows) if (ReferenceEquals(row.Tag, item)) { row.Cells[3].Value = item.Status; break; }
+        }
+        private void UpdateQueueControls()
+        {
+            if (queueCountLabel != null) queueCountLabel.Text = "下载队列（" + queueItems.Count + "）";
+            if (downloadButton != null)
+            {
+                downloadButton.Text = downloadRunning ? (queueStopRequested ? "正在停止…" : "停止队列") : "开始队列";
+                downloadButton.Enabled = downloadRunning ? !queueStopRequested : queueItems.Any(x => x.Status == "等待中" || x.Status == "已取消");
+            }
+            if (removeQueueButton != null) removeQueueButton.Enabled = !downloadRunning && queueGrid.SelectedRows.Count > 0;
+            if (clearFinishedButton != null) clearFinishedButton.Enabled = !downloadRunning && queueItems.Any(x => x.Status == "已完成" || x.Status == "失败");
+            if (retryFailedButton != null) retryFailedButton.Enabled = !downloadRunning && queueItems.Any(x => x.Status == "失败");
+        }
+        private void RemoveSelectedQueueItems()
+        {
+            foreach (DataGridViewRow row in queueGrid.SelectedRows.Cast<DataGridViewRow>().ToList())
+            {
+                var item = row.Tag as DownloadQueueItem; if (item != null && item.Status != "下载中") queueItems.Remove(item);
+                if (!row.IsNewRow) queueGrid.Rows.Remove(row);
+            }
+            UpdateQueueControls();
+        }
+        private void ClearFinishedQueueItems()
+        {
+            foreach (DataGridViewRow row in queueGrid.Rows.Cast<DataGridViewRow>().ToList())
+            {
+                var item = row.Tag as DownloadQueueItem;
+                if (item != null && (item.Status == "已完成" || item.Status == "失败")) { queueItems.Remove(item); queueGrid.Rows.Remove(row); }
+            }
+            UpdateQueueControls();
+        }
+        private void AppendLog(string text)
+        {
+            if (IsDisposed || !IsHandleCreated) return;
+            try { BeginInvoke((Action)(() => { if (IsDisposed) return; logBox.AppendText(text + Environment.NewLine); logBox.SelectionStart = logBox.TextLength; logBox.ScrollToCaret(); })); }
+            catch (InvalidOperationException) { }
         }
 
         private bool ValidProxy()
         {
-            string value = ytdlpOptions.Proxy.Trim(); if (value.Length == 0) return true;
-            Uri uri;
-            if (!Uri.TryCreate(value, UriKind.Absolute, out uri) || !(uri.Scheme == "http" || uri.Scheme == "https" || uri.Scheme == "socks4" || uri.Scheme == "socks4a" || uri.Scheme == "socks5" || uri.Scheme == "socks5h"))
-            { SetState("代理格式不正确。请在“配置 → YT-DLP”中检查代理地址。"); return false; }
+            if (!ValidProxyUrl(ytdlpOptions.Proxy))
+            { SetState("主代理格式不正确。请在“配置 → YT-DLP”中检查代理地址。"); return false; }
+            if (!ValidProxyUrl(ytdlpOptions.GeoVerificationProxy))
+            { SetState("地域验证代理格式不正确。请在“配置 → YT-DLP”中检查代理地址。"); return false; }
             return true;
+        }
+        private static bool ValidProxyUrl(string value)
+        {
+            if (String.IsNullOrWhiteSpace(value)) return true;
+            Uri uri;
+            return Uri.TryCreate(value.Trim(), UriKind.Absolute, out uri) &&
+                (uri.Scheme == "http" || uri.Scheme == "https" || uri.Scheme == "socks4" || uri.Scheme == "socks4a" || uri.Scheme == "socks5" || uri.Scheme == "socks5h");
+        }
+        private static string ProxySummary(string value)
+        {
+            if (String.IsNullOrWhiteSpace(value)) return "未设置";
+            Uri uri;
+            return Uri.TryCreate(value.Trim(), UriKind.Absolute, out uri) ? uri.Scheme + " 已设置" : "地址无效";
         }
         private void Busy(bool busy, string message)
         {
             analyzeButton.Enabled = !busy;
-            downloadButton.Enabled = !busy && current != null && (formatsGrid.Rows.Count > 0 || current.AudioChoices.Count > 0);
+            if (busy) progress.SetIndeterminate(true);
             progress.Visible = busy;
+            if (!busy) UpdateQueueControls();
             Application.UseWaitCursor = busy;
             ApplyWaitCursor(this, busy);
             Cursor.Current = busy ? Cursors.WaitCursor : Cursors.Default;
@@ -252,7 +479,11 @@ namespace dotSharK
             using (var d = new ConfigurationDialog(ytDlpPath, ffmpegPath, ffprobePath, denoPath, ytdlpOptions))
                 if (d.ShowDialog(this) == DialogResult.OK)
                 {
-                    ytDlpPath = d.YtDlpPath; ffmpegPath = d.FfmpegPath; ffprobePath = d.FfprobePath; denoPath = d.DenoPath; ytdlpOptions = d.Options;
+                    ytDlpPath = ExistingOrDefault(d.YtDlpPath, "yt-dlp.exe");
+                    ffmpegPath = ExistingOrDefault(d.FfmpegPath, "ffmpeg.exe");
+                    ffprobePath = ExistingOrDefault(d.FfprobePath, "ffprobe.exe");
+                    denoPath = ExistingOrDefault(d.DenoPath, "deno.exe");
+                    ytdlpOptions = d.Options;
                     RefreshClient(); SaveSettings();
                     SetState(client == null ? "尚未指定 yt-dlp.exe。" : "配置已保存 · " + Path.GetFileName(ytDlpPath));
                 }
@@ -281,12 +512,18 @@ namespace dotSharK
                             try { ytdlpOptions.Proxy = System.Text.Encoding.UTF8.GetString(System.Security.Cryptography.ProtectedData.Unprotect(Convert.FromBase64String(value), null, System.Security.Cryptography.DataProtectionScope.CurrentUser)); }
                             catch { ytdlpOptions.Proxy = ""; }
                         }
+                        else if (key == "geo-proxy")
+                        {
+                            try { ytdlpOptions.GeoVerificationProxy = System.Text.Encoding.UTF8.GetString(System.Security.Cryptography.ProtectedData.Unprotect(Convert.FromBase64String(value), null, System.Security.Cryptography.DataProtectionScope.CurrentUser)); }
+                            catch { ytdlpOptions.GeoVerificationProxy = ""; }
+                        }
                         else if (key == "folder") folderBox.Text = value;
                         else if (key == "yt-dlp") ytDlpPath = value;
                         else if (key == "ffmpeg") ffmpegPath = value;
                         else if (key == "ffprobe") ffprobePath = value;
                         else if (key == "deno") denoPath = value;
                         else if (key == "fragments") { int n; if (Int32.TryParse(value, out n)) ytdlpOptions.ConcurrentFragments = Math.Max(1, Math.Min(32, n)); }
+                        else if (key == "downloads") { int n; if (Int32.TryParse(value, out n)) ytdlpOptions.ConcurrentDownloads = Math.Max(1, Math.Min(6, n)); }
                         else if (key == "cookie-mode") ytdlpOptions.CookieMode = value == "file" ? "file" : "browser";
                         else if (key == "cookie-browser") ytdlpOptions.CookieBrowser = value;
                         else if (key == "cookie-root") ytdlpOptions.CookieProfileRoot = value;
@@ -304,11 +541,13 @@ namespace dotSharK
             try
             {
                 string protectedProxy = Convert.ToBase64String(System.Security.Cryptography.ProtectedData.Protect(System.Text.Encoding.UTF8.GetBytes(ytdlpOptions.Proxy ?? ""), null, System.Security.Cryptography.DataProtectionScope.CurrentUser));
+                string protectedGeoProxy = Convert.ToBase64String(System.Security.Cryptography.ProtectedData.Protect(System.Text.Encoding.UTF8.GetBytes(ytdlpOptions.GeoVerificationProxy ?? ""), null, System.Security.Cryptography.DataProtectionScope.CurrentUser));
                 File.WriteAllLines(settingsPath, new[] { "proxy=" + protectedProxy,
+                    "geo-proxy=" + protectedGeoProxy,
                     "folder=" + Uri.EscapeDataString(folderBox == null ? "" : folderBox.Text),
                     "yt-dlp=" + Uri.EscapeDataString(ytDlpPath), "ffmpeg=" + Uri.EscapeDataString(ffmpegPath),
                     "ffprobe=" + Uri.EscapeDataString(ffprobePath), "deno=" + Uri.EscapeDataString(denoPath),
-                    "fragments=" + ytdlpOptions.ConcurrentFragments, "cookie-mode=" + ytdlpOptions.CookieMode,
+                    "fragments=" + ytdlpOptions.ConcurrentFragments, "downloads=" + Math.Max(1, Math.Min(6, ytdlpOptions.ConcurrentDownloads)), "cookie-mode=" + ytdlpOptions.CookieMode,
                     "cookie-browser=" + Uri.EscapeDataString(ytdlpOptions.CookieBrowser ?? "firefox"),
                     "cookie-root=" + Uri.EscapeDataString(ytdlpOptions.CookieProfileRoot ?? ""),
                     "cookie-profile=" + Uri.EscapeDataString(ytdlpOptions.CookieProfile ?? ""),

@@ -6,7 +6,9 @@ namespace dotSharK
     internal sealed class YtDlpOptions
     {
         public string Proxy = "";
+        public string GeoVerificationProxy = "";
         public int ConcurrentFragments = 8;
+        public int ConcurrentDownloads = 3;
         public string CookieMode = "browser";
         public string CookieBrowser = "firefox";
         public string CookieProfileRoot = "";
@@ -27,6 +29,39 @@ namespace dotSharK
         public List<VideoChoice> VideoChoices = new List<VideoChoice>();
         public List<AudioChoice> AudioChoices = new List<AudioChoice>();
         public List<SubtitleChoice> Subtitles = new List<SubtitleChoice>();
+    }
+
+    internal sealed class LinkInspection
+    {
+        public MediaInfo Media;
+        public PlaylistInfo Playlist;
+        public bool IsPlaylist { get { return Playlist != null && Playlist.Entries.Count > 0; } }
+    }
+
+    internal sealed class PlaylistInfo
+    {
+        public string Title;
+        public List<PlaylistEntry> Entries = new List<PlaylistEntry>();
+    }
+
+    internal sealed class PlaylistEntry
+    {
+        public int Index;
+        public string Id, Title, Url;
+        public double Duration;
+    }
+
+    internal sealed class DownloadQueueItem
+    {
+        public string Title, Url, Container, SubtitleLanguage, OutputFolder, Status;
+        public double ProgressWeight = 1;
+        public MediaInfo Media;
+        public bool AudioOnly, AutomaticSubtitle, PlaylistItem;
+        public VideoChoice Video;
+        public AudioChoice Audio;
+        public SubtitleChoice Subtitle;
+        public int TargetHeight;
+        public string TargetCodec, TargetDynamicRange;
     }
 
     internal sealed class VideoChoice

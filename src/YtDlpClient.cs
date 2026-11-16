@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 
@@ -35,13 +36,57 @@ namespace dotSharK
             ProcessResult result = await RunCaptureAsync(args);
             if (result.ExitCode != 0 || String.IsNullOrWhiteSpace(result.Stdout))
                 throw new InvalidOperationException(UsefulError(result.Stderr, result.ExitCode));
+            return ParseMediaInfo(ParseJson(result.Stdout));
+        }
 
+        public async Task<LinkInspection> InspectAsync(string url, YtDlpOptions options)
+        {
+            var args = CommonArguments(options, false);
+            args.AddRange(new[] { "--dump-single-json", "--flat-playlist", "--no-warnings", "--skip-download", "--no-progress", url });
+            ProcessResult result = await RunCaptureAsync(args);
+            if (result.ExitCode != 0 || String.IsNullOrWhiteSpace(result.Stdout))
+                throw new InvalidOperationException(UsefulError(result.Stderr, result.ExitCode));
+            var root = ParseJson(result.Stdout);
+            var rawEntries = ObjList(root, "entries");
+            bool isPlaylist = Str(root, "_type").Equals("playlist", StringComparison.OrdinalIgnoreCase) || rawEntries.Count > 0;
+            if (!isPlaylist) return new LinkInspection { Media = ParseMediaInfo(root) };
+
+            var playlist = new PlaylistInfo { Title = Str(root, "title") };
+            int fallbackIndex = 0;
+            foreach (var entry in rawEntries)
+            {
+                if (entry == null) continue;
+                fallbackIndex++;
+                string id = Str(entry, "id");
+                string entryUrl = Str(entry, "webpage_url");
+                if (String.IsNullOrWhiteSpace(entryUrl)) entryUrl = Str(entry, "original_url");
+                if (String.IsNullOrWhiteSpace(entryUrl)) entryUrl = Str(entry, "url");
+                if (!String.IsNullOrWhiteSpace(id) && (String.IsNullOrWhiteSpace(entryUrl) || !entryUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase)))
+                    entryUrl = "https://www.youtube.com/watch?v=" + Uri.EscapeDataString(id);
+                if (String.IsNullOrWhiteSpace(entryUrl)) continue;
+                playlist.Entries.Add(new PlaylistEntry
+                {
+                    Index = Int(entry, "playlist_index") > 0 ? Int(entry, "playlist_index") : fallbackIndex,
+                    Id = id, Title = String.IsNullOrWhiteSpace(Str(entry, "title")) ? (id.Length == 0 ? "未命名视频" : id) : Str(entry, "title"),
+                    Url = entryUrl, Duration = Num(entry, "duration")
+                });
+            }
+            if (playlist.Entries.Count == 0) throw new InvalidOperationException("检测到播放列表，但没有取得可下载的视频项目。");
+            return new LinkInspection { Playlist = playlist };
+        }
+
+        private static Dictionary<string, object> ParseJson(string json)
+        {
             object parsed;
-            try { parsed = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue, RecursionLimit = 256 }.DeserializeObject(result.Stdout); }
+            try { parsed = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue, RecursionLimit = 256 }.DeserializeObject(json); }
             catch (Exception ex) { throw new InvalidOperationException("yt-dlp 返回的数据无法解析：" + ex.Message); }
             var root = parsed as Dictionary<string, object>;
             if (root == null) throw new InvalidOperationException("没有收到可识别的视频信息。");
+            return root;
+        }
 
+        private static MediaInfo ParseMediaInfo(Dictionary<string, object> root)
+        {
             var info = new MediaInfo
             {
                 Id = Str(root, "id"), Title = Str(root, "title"), Description = Str(root, "description"),
@@ -82,7 +127,7 @@ namespace dotSharK
         }
 
         public async Task DownloadAsync(MediaInfo info, VideoChoice video, AudioChoice audio, bool audioOnly,
-            string container, string folder, SubtitleChoice subtitle, YtDlpOptions options, Action<string> output)
+            string container, string folder, SubtitleChoice subtitle, YtDlpOptions options, Action<string> output, CancellationToken cancellationToken)
         {
             var args = CommonArguments(options, true);
             args.AddRange(new[] { "--no-playlist", "--newline", "--progress", "-P", folder, "-o", "%(title)s.%(ext)s" });
@@ -105,8 +150,72 @@ namespace dotSharK
                 args.Add("--sub-format"); args.Add("srt/best");
             }
             args.Add(info.WebpageUrl);
-            var result = await RunStreamingAsync(args, output);
+            var result = await RunStreamingAsync(args, output, cancellationToken);
             if (result.ExitCode != 0) throw new InvalidOperationException(UsefulError(result.Stderr, result.ExitCode));
+        }
+
+        public async Task DownloadPlaylistItemAsync(DownloadQueueItem item, YtDlpOptions options, Action<string> output, CancellationToken cancellationToken)
+        {
+            if (item == null || String.IsNullOrWhiteSpace(item.Url)) throw new InvalidOperationException("播放列表项目网址为空。");
+            var args = CommonArguments(options, true);
+            args.AddRange(new[] { "--no-playlist", "--newline", "--progress", "-P", item.OutputFolder, "-o", "%(title)s [%(id)s].%(ext)s" });
+            if (!String.IsNullOrWhiteSpace(FfmpegPath) && String.IsNullOrWhiteSpace(FfprobePath)) { args.Add("--ffmpeg-location"); args.Add(FfmpegPath); }
+            args.Add("-f"); args.Add(PlaylistFormatSelector(item));
+            if (!String.IsNullOrWhiteSpace(item.Container)) { args.Add("--merge-output-format"); args.Add(item.Container.ToLowerInvariant()); }
+            if (!String.IsNullOrWhiteSpace(item.SubtitleLanguage))
+            {
+                args.Add(item.AutomaticSubtitle ? "--write-auto-subs" : "--write-subs");
+                args.Add("--sub-langs"); args.Add(item.SubtitleLanguage);
+                args.Add("--sub-format"); args.Add("srt/best");
+            }
+            args.Add(item.Url);
+            var result = await RunStreamingAsync(args, output, cancellationToken);
+            if (result.ExitCode != 0) throw new InvalidOperationException(UsefulError(result.Stderr, result.ExitCode));
+        }
+
+        private static string PlaylistFormatSelector(DownloadQueueItem item)
+        {
+            string audio = "bestaudio";
+            if (item.Audio != null)
+            {
+                string language = String.IsNullOrWhiteSpace(item.Audio.Language) ? "" : "[language^=" + item.Audio.Language + "]";
+                string codec = AudioCodecFilter(item.Audio.Codec);
+                audio = "bestaudio" + language + codec + "/bestaudio" + language + "/bestaudio";
+            }
+            if (item.AudioOnly) return audio + "/bestaudio/best";
+
+            string height = item.TargetHeight > 0 ? "[height<=" + item.TargetHeight.ToString(CultureInfo.InvariantCulture) + "]" : "";
+            string codecFilter = VideoCodecFilter(item.TargetCodec);
+            string rangeFilter = String.IsNullOrWhiteSpace(item.TargetDynamicRange) || item.TargetDynamicRange.Equals("SDR", StringComparison.OrdinalIgnoreCase)
+                ? "" : "[dynamic_range^=" + item.TargetDynamicRange + "]";
+            string preferred = "bestvideo" + height + codecFilter + rangeFilter;
+            string sameCodec = "bestvideo" + height + codecFilter;
+            string anyCodec = "bestvideo" + height;
+            string progressive = "best" + height;
+            return preferred + "+" + audio + "/" + sameCodec + "+" + audio + "/" + anyCodec + "+" + audio + "/" + progressive + "/best";
+        }
+
+        private static string VideoCodecFilter(string codec)
+        {
+            if (String.IsNullOrWhiteSpace(codec)) return "";
+            if (codec == "AV1") return "[vcodec^=av01]";
+            if (codec == "VP9") return "[vcodec^=vp09]";
+            if (codec == "VP8") return "[vcodec^=vp08]";
+            if (codec == "H.264") return "[vcodec^=avc1]";
+            if (codec == "HEVC") return "[vcodec^=hev1]";
+            return "";
+        }
+
+        private static string AudioCodecFilter(string codec)
+        {
+            if (String.IsNullOrWhiteSpace(codec)) return "";
+            if (codec == "AAC") return "[acodec^=mp4a]";
+            if (codec == "Opus") return "[acodec^=opus]";
+            if (codec == "Vorbis") return "[acodec^=vorbis]";
+            if (codec == "AC-3") return "[acodec^=ac-3]";
+            if (codec == "E-AC-3") return "[acodec^=ec-3]";
+            if (codec == "FLAC") return "[acodec^=flac]";
+            return "";
         }
 
         private List<string> CommonArguments(YtDlpOptions options, bool downloading)
@@ -114,6 +223,7 @@ namespace dotSharK
             options = options ?? new YtDlpOptions();
             var args = new List<string> { "--ignore-config" };
             if (!String.IsNullOrWhiteSpace(options.Proxy)) { args.Add("--proxy"); args.Add(options.Proxy.Trim()); }
+            if (!String.IsNullOrWhiteSpace(options.GeoVerificationProxy)) { args.Add("--geo-verification-proxy"); args.Add(options.GeoVerificationProxy.Trim()); }
             if (options.CookieMode == "file")
             {
                 if (!String.IsNullOrWhiteSpace(options.CookieFile)) { args.Add("--cookies"); args.Add(options.CookieFile.Trim()); }
@@ -147,16 +257,47 @@ namespace dotSharK
             }
         }
 
-        private async Task<ProcessResult> RunStreamingAsync(List<string> args, Action<string> output)
+        private async Task<ProcessResult> RunStreamingAsync(List<string> args, Action<string> output, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             using (var p = Start(args))
             {
                 var error = new StringBuilder();
                 p.OutputDataReceived += (s, e) => { if (e.Data != null && output != null) output(e.Data); };
                 p.ErrorDataReceived += (s, e) => { if (e.Data != null) lock (error) error.AppendLine(e.Data); };
-                p.BeginOutputReadLine(); p.BeginErrorReadLine();
-                await Task.Run(() => p.WaitForExit());
+                using (cancellationToken.Register(() => Task.Run(() => KillProcessTree(p))))
+                {
+                    p.BeginOutputReadLine(); p.BeginErrorReadLine();
+                    await Task.Run(() => p.WaitForExit());
+                }
+                cancellationToken.ThrowIfCancellationRequested();
                 return new ProcessResult { ExitCode = p.ExitCode, Stderr = error.ToString() };
+            }
+        }
+
+        private static void KillProcessTree(Process process)
+        {
+            try
+            {
+                if (process == null || process.HasExited) return;
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "taskkill.exe",
+                    Arguments = "/PID " + process.Id.ToString(CultureInfo.InvariantCulture) + " /T /F",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                };
+                using (var killer = Process.Start(psi))
+                {
+                    if (killer != null && !killer.WaitForExit(5000)) killer.Kill();
+                }
+            }
+            catch
+            {
+                try { if (process != null && !process.HasExited) process.Kill(); }
+                catch { }
             }
         }
 

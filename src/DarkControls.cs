@@ -76,10 +76,75 @@ namespace dotSharK
         }
     }
 
+    internal sealed class CircularUpdateButton : Control
+    {
+        internal bool Nightly { get; set; }
+        internal bool Updating { get; set; }
+
+        internal CircularUpdateButton()
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            Size = new Size(DarkPalette.ControlHeight, DarkPalette.ControlHeight);
+            MinimumSize = new Size(DarkPalette.ControlHeight, DarkPalette.ControlHeight);
+            MaximumSize = new Size(DarkPalette.ControlHeight, DarkPalette.ControlHeight);
+            Margin = Padding.Empty;
+            Cursor = Cursors.Hand;
+            AccessibleRole = AccessibleRole.PushButton;
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            e.Graphics.Clear(DarkPalette.Surface);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            Color channel = Nightly ? Color.FromArgb(230, 177, 61) : Color.FromArgb(38, 190, 94);
+            if (!Enabled) channel = DarkPalette.Muted;
+            Rectangle bounds = ClientRectangle;
+            Color back = !Enabled ? DarkPalette.Surface : bounds.Contains(PointToClient(Cursor.Position)) ? Color.FromArgb(58, 58, 58) : DarkPalette.Surface;
+            using (var brush = new SolidBrush(back)) e.Graphics.FillRectangle(brush, bounds);
+            using (var pen = new Pen(DarkPalette.Border)) e.Graphics.DrawRectangle(pen, 0, 0, Math.Max(0, Width - 1), Math.Max(0, Height - 1));
+
+            float radius = Math.Min(7.2f, Math.Min(Width, Height) * 0.31f);
+            float cx = Width / 2f, cy = Height / 2f;
+            var ring = new RectangleF(cx - radius, cy - radius, radius * 2, radius * 2);
+            using (var pen = new Pen(channel, 2.1f))
+            {
+                pen.StartCap = System.Drawing.Drawing2D.LineCap.Round;
+                pen.EndCap = System.Drawing.Drawing2D.LineCap.Round;
+                e.Graphics.DrawArc(pen, ring, 42, 286);
+                double end = 328 * Math.PI / 180.0;
+                double tangent = (328 + 90) * Math.PI / 180.0;
+                float ex = cx + radius * (float)Math.Cos(end), ey = cy + radius * (float)Math.Sin(end);
+                float tx = (float)Math.Cos(tangent), ty = (float)Math.Sin(tangent);
+                float nx = -ty, ny = tx;
+                PointF tip = new PointF(ex + tx * 1.5f, ey + ty * 1.5f);
+                PointF basePoint = new PointF(ex - tx * 3.8f, ey - ty * 3.8f);
+                PointF[] arrow = { tip, new PointF(basePoint.X + nx * 2.5f, basePoint.Y + ny * 2.5f), new PointF(basePoint.X - nx * 2.5f, basePoint.Y - ny * 2.5f) };
+                using (var fill = new SolidBrush(channel)) e.Graphics.FillPolygon(fill, arrow);
+            }
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            base.OnMouseUp(e);
+            if (e.Button == MouseButtons.Left && ClientRectangle.Contains(e.Location) && Enabled) OnClick(EventArgs.Empty);
+        }
+        protected override void OnKeyUp(KeyEventArgs e)
+        {
+            base.OnKeyUp(e);
+            if (Enabled && (e.KeyCode == Keys.Enter || e.KeyCode == Keys.Space)) OnClick(EventArgs.Empty);
+        }
+    }
+
     internal sealed class DarkProgressBar : Control
     {
         private readonly Timer animationTimer;
         private int segmentX = -1;
+        private int progressValue;
+        private bool indeterminate = true;
         private int SegmentWidth { get { return Math.Min(72, Math.Max(20, Width / 4)); } }
 
         internal DarkProgressBar()
@@ -89,7 +154,7 @@ namespace dotSharK
             animationTimer = new Timer { Interval = 40 };
             animationTimer.Tick += (s, e) =>
             {
-                if (Width <= 0) return;
+                if (!indeterminate || Width <= 0) return;
                 segmentX += 5;
                 if (segmentX > Width) segmentX = -SegmentWidth;
                 Invalidate();
@@ -102,13 +167,27 @@ namespace dotSharK
         protected override void OnPaint(PaintEventArgs e)
         {
             if (!Visible || Width <= 0 || Height <= 0) return;
-            Rectangle chunk = new Rectangle(segmentX, 0, SegmentWidth, Height);
+            int fillWidth = indeterminate ? SegmentWidth : (int)Math.Round(Width * progressValue / 10000.0);
+            int x = indeterminate ? segmentX : 0;
+            Rectangle chunk = new Rectangle(x, 0, fillWidth, Height);
             chunk.Intersect(ClientRectangle);
             if (chunk.Width > 0) using (Brush brush = new SolidBrush(DarkPalette.Accent)) e.Graphics.FillRectangle(brush, chunk);
         }
+        internal void SetProgress(double value)
+        {
+            progressValue = (int)Math.Round(Math.Max(0, Math.Min(1, value)) * 10000);
+            if (!indeterminate) Invalidate();
+        }
+        internal void SetIndeterminate(bool value)
+        {
+            if (indeterminate == value) return;
+            indeterminate = value;
+            if (value) segmentX = -SegmentWidth;
+            UpdateAnimation();
+        }
         private void UpdateAnimation()
         {
-            if (IsHandleCreated && Visible) animationTimer.Start();
+            if (IsHandleCreated && Visible && indeterminate) animationTimer.Start();
             else animationTimer.Stop();
             Invalidate();
         }
@@ -257,6 +336,7 @@ namespace dotSharK
         [DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr hwnd, IntPtr dc);
         [DllImport("user32.dll")] private static extern bool RedrawWindow(IntPtr hwnd, IntPtr rect, IntPtr region, uint flags);
         private bool hover;
+        internal bool ClearSelectionOnFocus { get; set; }
         internal DarkTextBox() { BackColor = DarkPalette.Field; ForeColor = DarkPalette.Foreground; BorderStyle = BorderStyle.FixedSingle; }
         private void PaintFrame()
         {
@@ -272,7 +352,13 @@ namespace dotSharK
         }
         protected override void OnMouseEnter(EventArgs e) { hover = true; base.OnMouseEnter(e); PaintFrame(); }
         protected override void OnMouseLeave(EventArgs e) { hover = false; base.OnMouseLeave(e); PaintFrame(); }
-        protected override void OnGotFocus(EventArgs e) { base.OnGotFocus(e); PaintFrame(); }
+        protected override void OnGotFocus(EventArgs e)
+        {
+            base.OnGotFocus(e);
+            if (ClearSelectionOnFocus && IsHandleCreated)
+                BeginInvoke((Action)(() => { if (!IsDisposed && Focused) SelectionLength = 0; }));
+            PaintFrame();
+        }
         protected override void OnLostFocus(EventArgs e) { base.OnLostFocus(e); PaintFrame(); }
         protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e); if (!Multiline) NativeDarkTheme.Apply(this, ""); }
         protected override void OnSizeChanged(EventArgs e) { base.OnSizeChanged(e); if (IsHandleCreated) RedrawWindow(Handle, IntPtr.Zero, IntPtr.Zero, 0x401); }
@@ -280,6 +366,24 @@ namespace dotSharK
 
     internal sealed class DarkComboBox : UserControl
     {
+        private sealed class ComboEditorTextBox : TextBox
+        {
+            [DllImport("user32.dll", EntryPoint = "SendMessageW", CharSet = CharSet.Unicode)]
+            private static extern IntPtr SendMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam);
+            internal bool SuppressTextSelection;
+            private void ClearNativeSelection()
+            {
+                if (SuppressTextSelection && IsHandleCreated && Focused)
+                    SendMessage(Handle, 0x00B1, new IntPtr(-1), new IntPtr(-1)); // EM_SETSEL: move caret to end, no selection
+            }
+            protected override void WndProc(ref Message m)
+            {
+                if (m.Msg == 0x000F) ClearNativeSelection(); // WM_PAINT
+                base.WndProc(ref m);
+                if (m.Msg == 0x0007) ClearNativeSelection(); // WM_SETFOCUS
+            }
+        }
+
         internal sealed class ItemCollection
         {
             private readonly DarkComboBox owner;
@@ -293,7 +397,7 @@ namespace dotSharK
             internal int IndexOf(object value) { return data.IndexOf(value); }
         }
 
-        private readonly TextBox editor = new TextBox();
+        private readonly ComboEditorTextBox editor = new ComboEditorTextBox();
         private readonly Panel arrow = new Panel();
         private readonly ToolStripDropDown popup;
         private readonly ListBox list = new ListBox();
@@ -301,13 +405,22 @@ namespace dotSharK
         private bool hover;
         private int selectedIndex = -1;
         private ComboBoxStyle dropDownStyle = ComboBoxStyle.DropDownList;
+        internal bool ShowFocusAccent { get; set; } = true;
+        internal bool ClearSelectionOnFocus { get; set; }
         public readonly ItemCollection Items;
         public event EventHandler SelectedIndexChanged;
 
         public ComboBoxStyle DropDownStyle
         {
             get { return dropDownStyle; }
-            set { dropDownStyle = value; editor.ReadOnly = value != ComboBoxStyle.DropDown; }
+            set
+            {
+                dropDownStyle = value;
+                editor.ReadOnly = value != ComboBoxStyle.DropDown;
+                editor.SuppressTextSelection = value != ComboBoxStyle.DropDown;
+                if (editor.SuppressTextSelection && editor.IsHandleCreated && editor.Focused)
+                    editor.SelectionLength = 0;
+            }
         }
         public int SelectedIndex
         {
@@ -349,6 +462,12 @@ namespace dotSharK
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
             BackColor = DarkPalette.Field; ForeColor = DarkPalette.Foreground; Height = DarkPalette.ControlHeight; MinimumSize = new Size(45, DarkPalette.ControlHeight); Margin = new Padding(0);
             editor.BorderStyle = BorderStyle.None; editor.BackColor = DarkPalette.Field; editor.ForeColor = DarkPalette.Foreground; editor.Font = Font; editor.ReadOnly = true;
+            editor.SuppressTextSelection = true;
+            editor.GotFocus += (s, e) =>
+            {
+                if (ClearSelectionOnFocus && editor.IsHandleCreated)
+                    editor.BeginInvoke((Action)(() => { if (!editor.IsDisposed && editor.Focused) editor.SelectionLength = 0; }));
+            };
             editor.TextChanged += (s, e) => { if (!syncing && dropDownStyle == ComboBoxStyle.DropDown) { selectedIndex = -1; EventHandler h = SelectedIndexChanged; if (h != null) h(this, EventArgs.Empty); } };
             editor.MouseDown += (s, e) => { if (dropDownStyle != ComboBoxStyle.DropDown) TogglePopup(); };
             editor.KeyDown += EditorKeyDown;
@@ -385,7 +504,7 @@ namespace dotSharK
         protected override void OnPaintBackground(PaintEventArgs e) { using (Brush b = new SolidBrush(Enabled ? DarkPalette.Field : DarkPalette.Surface)) e.Graphics.FillRectangle(b, ClientRectangle); }
         protected override void OnPaint(PaintEventArgs e)
         {
-            Color border = !Enabled ? DarkPalette.Border : ContainsFocus ? DarkPalette.Focus : hover ? Color.FromArgb(88, 94, 101) : DarkPalette.Border;
+            Color border = !Enabled ? DarkPalette.Border : ShowFocusAccent && ContainsFocus ? DarkPalette.Focus : hover ? Color.FromArgb(88, 94, 101) : DarkPalette.Border;
             using (Pen p = new Pen(border)) e.Graphics.DrawRectangle(p, 0, 0, Math.Max(0, Width - 1), Math.Max(0, Height - 1));
             using (Pen p = new Pen(DarkPalette.Border)) e.Graphics.DrawLine(p, Width - 26, 1, Width - 26, Height - 2);
         }
@@ -393,7 +512,7 @@ namespace dotSharK
         {
             int x = e.ClipRectangle.Width / 2, y = e.ClipRectangle.Height / 2;
             Point[] points = { new Point(x - 4, y - 2), new Point(x + 4, y - 2), new Point(x, y + 2) };
-            using (Brush b = new SolidBrush(!Enabled ? Color.Gray : hover || ContainsFocus ? DarkPalette.Foreground : DarkPalette.Muted)) e.Graphics.FillPolygon(b, points);
+            using (Brush b = new SolidBrush(!Enabled ? Color.Gray : hover || ShowFocusAccent && ContainsFocus ? DarkPalette.Foreground : DarkPalette.Muted)) e.Graphics.FillPolygon(b, points);
         }
         private void DrawListItem(object sender, DrawItemEventArgs e)
         {

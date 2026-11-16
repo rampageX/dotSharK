@@ -14,14 +14,19 @@ namespace dotSharK
 {
     internal sealed class ConfigurationDialog : DarkSettingsForm
     {
+        private sealed class UpdatePromptForm : DarkSettingsForm { internal UpdatePromptForm() { } }
         private readonly Color bg = Color.FromArgb(34, 34, 34), panel = Color.FromArgb(43, 43, 43), field = Color.FromArgb(51, 51, 51), green = DarkPalette.Accent, fg = Color.FromArgb(235, 238, 240), muted = Color.FromArgb(153, 163, 170);
-        private readonly TextBox[] toolPaths = new TextBox[4];
+        private readonly DarkTextBox[] toolPaths = new DarkTextBox[4];
         private readonly string[] toolNames = { "yt-dlp.exe", "ffmpeg.exe", "ffprobe.exe", "deno.exe" };
-        private TextBox proxyBox, profileRootBox, cookieFileBox;
+        private TextBox proxyBox, geoProxyBox, profileRootBox, cookieFileBox;
         private DarkNumericUpDown fragmentsBox;
+        private DarkNumericUpDown downloadsBox;
         private DarkComboBox sourceBox, browserBox, profileBox;
         private Button profileSearchButton;
         private Label profileStatus, cookieFileStatus, profileFoundCheck;
+        private Label toolUpdateStatus;
+        private readonly List<CircularUpdateButton> toolUpdateButtons = new List<CircularUpdateButton>();
+        private bool toolUpdateRunning;
         private int profileSearchGeneration;
 
         public string YtDlpPath { get { return toolPaths[0].Text.Trim(); } }
@@ -33,7 +38,7 @@ namespace dotSharK
         public ConfigurationDialog(string ytDlp, string ffmpeg, string ffprobe, string deno, YtDlpOptions options)
         {
             options = options ?? new YtDlpOptions();
-            Options = new YtDlpOptions { Proxy = options.Proxy, ConcurrentFragments = options.ConcurrentFragments, CookieMode = options.CookieMode,
+            Options = new YtDlpOptions { Proxy = options.Proxy, GeoVerificationProxy = options.GeoVerificationProxy, ConcurrentFragments = options.ConcurrentFragments, ConcurrentDownloads = options.ConcurrentDownloads, CookieMode = options.CookieMode,
                 CookieBrowser = options.CookieBrowser, CookieProfileRoot = options.CookieProfileRoot, CookieProfile = options.CookieProfile, CookieFile = options.CookieFile };
             Text = "dotSharK 配置"; StartPosition = FormStartPosition.CenterParent; FormBorderStyle = FormBorderStyle.FixedDialog; Icon = AppBranding.CreateIcon();
             MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false; BackColor = bg; ForeColor = fg; Font = new Font("Microsoft YaHei UI", 9F); ClientSize = new Size(790, 540); MinimumSize = new Size(700, 500);
@@ -49,49 +54,139 @@ namespace dotSharK
             var save = StyledButton("保存", true); save.Width = 98; save.DialogResult = DialogResult.None;
             var cancel = StyledButton("取消", false); cancel.Width = 98; cancel.DialogResult = DialogResult.Cancel; cancel.Margin = new Padding(0, 0, 10, 0);
             save.Click += SaveClicked; footer.Controls.Add(save); footer.Controls.Add(cancel); root.Controls.Add(footer, 0, 1);
-            AcceptButton = save; CancelButton = cancel;
+            AcceptButton = save; CancelButton = cancel; ActiveControl = tabs;
         }
 
         private void BuildToolsPage(Panel page, string[] values)
         {
-            var content = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, BackColor = bg };
-            content.RowStyles.Add(new RowStyle(SizeType.Absolute, 150)); content.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            var grid = new TableLayoutPanel { Dock = DockStyle.Top, Height = 150, ColumnCount = 3, RowCount = 5, BackColor = bg, Margin = Padding.Empty };
-            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92));
-            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); for (int i = 0; i < 4; i++) grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
-            grid.Controls.Add(StyledLabel("程序"), 0, 0); grid.Controls.Add(StyledLabel("可执行文件路径（留空时自动检查 dotSharK 目录和 tools 子目录）"), 1, 0);
+            var content = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, BackColor = bg };
+            content.RowStyles.Add(new RowStyle(SizeType.Absolute, 158)); content.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); content.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            var grid = new TableLayoutPanel { Dock = DockStyle.Top, Height = 158, ColumnCount = 5, RowCount = 5, BackColor = bg, Margin = Padding.Empty };
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 82)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 28)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 28));
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); for (int i = 0; i < 4; i++) grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+            grid.Controls.Add(StyledLabel("程序"), 0, 0); grid.Controls.Add(StyledLabel("可执行文件路径（留空时自动检查 dotSharK 目录和 tools 子目录）"), 1, 0); grid.SetColumnSpan(grid.GetControlFromPosition(1, 0), 4);
             for (int i = 0; i < 4; i++)
             {
                 int index = i, row = i + 1;
                 grid.Controls.Add(StyledLabel(toolNames[i]), 0, row);
-                toolPaths[i] = StyledTextBox(values[i]); SetBottomField(toolPaths[i], true, 8); grid.Controls.Add(toolPaths[i], 1, row);
-                var browse = StyledButton("浏览…", false); SetBottomField(browse, true, 0); browse.Click += (s, e) => BrowseTool(index); grid.Controls.Add(browse, 2, row);
+                toolPaths[i] = StyledTextBox(values[i]); toolPaths[i].ClearSelectionOnFocus = i == 0; SetBottomField(toolPaths[i], true, 8); grid.Controls.Add(toolPaths[i], 1, row);
+                var browse = StyledButton("浏览…", false); browse.Width = 80; browse.Height = DarkPalette.ControlHeight; browse.Anchor = AnchorStyles.Left | AnchorStyles.Bottom; browse.Margin = Padding.Empty; browse.Click += (s, e) => BrowseTool(index); grid.Controls.Add(browse, 2, row);
+                var stable = new CircularUpdateButton { Nightly = false, Anchor = AnchorStyles.Right | AnchorStyles.Bottom, Margin = Padding.Empty, AccessibleName = toolNames[i] + " 更新稳定版" };
+                var nightly = new CircularUpdateButton { Nightly = true, Anchor = AnchorStyles.Right | AnchorStyles.Bottom, Margin = Padding.Empty, AccessibleName = toolNames[i] + " 更新 Nightly" };
+                var tips = new ToolTip();
+                tips.SetToolTip(stable, "更新 " + toolNames[i] + " 稳定版"); tips.SetToolTip(nightly, i == 3 ? "更新 Deno Canary（开发版）" : "更新 " + toolNames[i] + " Nightly");
+                stable.Click += async (s, e) => await UpdateToolAsync(index, false);
+                nightly.Click += async (s, e) => await UpdateToolAsync(index, true);
+                toolUpdateButtons.Add(stable); toolUpdateButtons.Add(nightly);
+                grid.Controls.Add(stable, 3, row); grid.Controls.Add(nightly, 4, row);
             }
             content.Controls.Add(grid, 0, 0);
-            content.Controls.Add(new Label { Text = "路径保存在 dotSharK.ini 中。YT-DLP 页面中的代理、并发和 Cookie 设置同样由 dotSharK 统一传参。", Dock = DockStyle.Fill, ForeColor = muted, Padding = new Padding(0, 12, 0, 0), AutoEllipsis = true }, 0, 1);
+            toolUpdateStatus = new Label { Text = "绿色按钮更新稳定版；黄色按钮更新 Nightly。更新使用 YT-DLP 页中的主代理。未指定路径时写入程序目录的 tools 子目录。", Dock = DockStyle.Fill, ForeColor = muted, Padding = new Padding(0, 7, 0, 0), AutoEllipsis = true };
+            content.Controls.Add(toolUpdateStatus, 0, 1);
+            content.Controls.Add(new Label { Text = "路径保存在 dotSharK.ini 中。浏览按钮只选择路径；在线更新会先下载到临时位置并验证版本，再替换目标文件。FFmpeg 稳定版来自 Gyan Builds，Nightly 来自 BtbN FFmpeg Builds。", Dock = DockStyle.Fill, ForeColor = muted, Padding = new Padding(0, 10, 0, 0), AutoEllipsis = true }, 0, 2);
             page.Controls.Add(content);
+        }
+
+        private async Task UpdateToolAsync(int toolIndex, bool nightly)
+        {
+            if (toolUpdateRunning) return;
+            toolUpdateRunning = true;
+            foreach (var button in toolUpdateButtons) button.Enabled = false;
+            string channel = nightly ? (toolIndex == 3 ? "Canary" : "Nightly") : "稳定版";
+            string target = ExternalToolUpdater.GetTargetPath(toolIndex, toolPaths[toolIndex].Text);
+            toolUpdateStatus.ForeColor = muted;
+            toolUpdateStatus.Text = "正在检查 " + toolNames[toolIndex] + " " + channel + " 版本…";
+            try
+            {
+                ExternalToolUpdater.UpdateCheckResult check = await ExternalToolUpdater.CheckAsync(toolIndex, nightly, target, proxyBox.Text.Trim());
+                DialogResult choice = ShowUpdateVersionDialog(toolNames[toolIndex], channel, check);
+                if (choice == DialogResult.Cancel)
+                {
+                    toolUpdateStatus.Text = "已取消更新检查。";
+                    return;
+                }
+                if (choice == DialogResult.Yes && check.IsCurrentOrNewer)
+                {
+                    toolUpdateStatus.ForeColor = green;
+                    toolUpdateStatus.Text = "当前版本已是最新或更新；如需重新安装，请选择“强制更新”。";
+                    return;
+                }
+                toolUpdateStatus.Text = "正在通过主代理下载 " + toolNames[toolIndex] + " " + channel + "…";
+                string version = await ExternalToolUpdater.UpdateAsync(toolIndex, nightly, target, proxyBox.Text.Trim());
+                toolUpdateStatus.ForeColor = green;
+                toolUpdateStatus.Text = "更新完成 · " + toolNames[toolIndex] + " · " + version + " · " + target;
+            }
+            catch (Exception ex)
+            {
+                toolUpdateStatus.ForeColor = Color.FromArgb(225, 135, 120);
+                toolUpdateStatus.Text = "更新失败 · " + ex.Message;
+            }
+            finally
+            {
+                toolUpdateRunning = false;
+                foreach (var button in toolUpdateButtons) if (!button.IsDisposed) button.Enabled = true;
+            }
+        }
+
+        private DialogResult ShowUpdateVersionDialog(string toolName, string channel, ExternalToolUpdater.UpdateCheckResult check)
+        {
+            using (var dialog = new UpdatePromptForm())
+            {
+                dialog.Text = "检查更新 · " + toolName;
+                dialog.StartPosition = FormStartPosition.CenterParent;
+                dialog.FormBorderStyle = FormBorderStyle.FixedDialog;
+                dialog.MaximizeBox = false; dialog.MinimizeBox = false; dialog.ShowInTaskbar = false;
+                dialog.Icon = AppBranding.CreateIcon(); dialog.BackColor = bg; dialog.ForeColor = fg;
+                dialog.Font = new Font("Microsoft YaHei UI", 9F); dialog.ClientSize = new Size(500, 222);
+                var root = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = bg, Padding = new Padding(18, 14, 18, 12), ColumnCount = 2, RowCount = 4 };
+                root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 94)); root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+                root.Controls.Add(new Label { Text = "当前版本", ForeColor = muted, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
+                root.Controls.Add(new Label { Text = check.CurrentVersion, ForeColor = fg, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true }, 1, 0);
+                root.Controls.Add(new Label { Text = "远端版本", ForeColor = muted, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 1);
+                root.Controls.Add(new Label { Text = check.RemoteVersion + "  ·  " + channel, ForeColor = green, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true }, 1, 1);
+                string note = check.IsCurrentOrNewer
+                    ? "当前版本已是最新或更新。普通更新不会重复下载；强制更新会重新下载并覆盖。"
+                    : "普通更新仅在远端版本较新时执行；强制更新会重新下载并覆盖当前文件。";
+                root.Controls.Add(new Label { Text = note, ForeColor = muted, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true }, 0, 2);
+                root.SetColumnSpan(root.GetControlFromPosition(0, 2), 2);
+                var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, WrapContents = false, BackColor = bg, Margin = Padding.Empty };
+                var cancel = StyledButton("取消", false); cancel.Width = 86; cancel.DialogResult = DialogResult.Cancel; cancel.Margin = new Padding(8, 0, 0, 0);
+                var force = StyledButton("强制更新", false); force.Width = 98; force.DialogResult = DialogResult.Retry; force.Margin = new Padding(8, 0, 0, 0);
+                var update = StyledButton("更新", true); update.Width = 86; update.DialogResult = DialogResult.Yes; update.Enabled = !check.IsCurrentOrNewer; update.Margin = new Padding(0, 0, 0, 0);
+                buttons.Controls.Add(cancel); buttons.Controls.Add(force); buttons.Controls.Add(update); root.Controls.Add(buttons, 0, 3); root.SetColumnSpan(buttons, 2);
+                dialog.Controls.Add(root); dialog.CancelButton = cancel; dialog.AcceptButton = update;
+                return dialog.ShowDialog(this);
+            }
         }
 
         private void BuildYtPage(Panel page)
         {
-            var grid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 9, BackColor = bg, Padding = new Padding(2) };
+            var grid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 11, BackColor = bg, Padding = new Padding(2) };
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 106));
-            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
-            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
-            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+            for (int i = 0; i < 8; i++) grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
             grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
             grid.Controls.Add(StyledLabel("代理"), 0, 0);
             proxyBox = StyledTextBox(Options.Proxy); SetBottomField(proxyBox, true, 0); grid.Controls.Add(proxyBox, 1, 0); grid.SetColumnSpan(proxyBox, 2);
-            grid.Controls.Add(StyledLabel("分片并发"), 0, 1);
+            grid.Controls.Add(StyledLabel("地域验证代理"), 0, 1);
+            geoProxyBox = StyledTextBox(Options.GeoVerificationProxy); SetBottomField(geoProxyBox, true, 0); grid.Controls.Add(geoProxyBox, 1, 1);
+            var geoHint = new Label { Text = "仅地区验证", ForeColor = muted, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
+            var geoTip = new ToolTip(); geoTip.SetToolTip(geoHint, "用于 yt-dlp 对部分地域限制网站进行 IP 验证；实际视频下载仍使用上方主代理。"); geoTip.SetToolTip(geoProxyBox, "用于 yt-dlp 对部分地域限制网站进行 IP 验证；实际视频下载仍使用上方主代理。"); grid.Controls.Add(geoHint, 2, 1);
+            grid.Controls.Add(StyledLabel("分片并发"), 0, 2);
             fragmentsBox = new DarkNumericUpDown { Minimum = 1, Maximum = 32, Value = Math.Max(1, Math.Min(32, Options.ConcurrentFragments)), Width = 116, Height = DarkPalette.ControlHeight, Margin = Padding.Empty, Anchor = AnchorStyles.Left | AnchorStyles.Bottom, BackColor = field, ForeColor = fg, BorderStyle = BorderStyle.FixedSingle, TextAlign = HorizontalAlignment.Center };
-            grid.Controls.Add(fragmentsBox, 1, 1);
-            grid.Controls.Add(new Label { Text = "下载分片并发数", ForeColor = muted, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 2, 1);
+            grid.Controls.Add(fragmentsBox, 1, 2);
+            grid.Controls.Add(new Label { Text = "下载分片并发数", ForeColor = muted, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 2, 2);
 
-            grid.Controls.Add(StyledLabel("Cookie 来源"), 0, 2);
-            sourceBox = StyledCombo(new[] { "浏览器", "Cookie 文件" }); sourceBox.SelectedIndex = Options.CookieMode == "file" ? 1 : 0; sourceBox.Width = 150; sourceBox.Anchor = AnchorStyles.Left | AnchorStyles.Bottom; grid.Controls.Add(sourceBox, 1, 2);
-            grid.Controls.Add(StyledLabel("浏览器"), 0, 3);
+            grid.Controls.Add(StyledLabel("同时下载数"), 0, 3);
+            downloadsBox = new DarkNumericUpDown { Minimum = 1, Maximum = 6, Value = Math.Max(1, Math.Min(6, Options.ConcurrentDownloads)), Width = 116, Height = DarkPalette.ControlHeight, Margin = Padding.Empty, Anchor = AnchorStyles.Left | AnchorStyles.Bottom, BackColor = field, ForeColor = fg, BorderStyle = BorderStyle.FixedSingle, TextAlign = HorizontalAlignment.Center };
+            grid.Controls.Add(downloadsBox, 1, 3);
+            grid.Controls.Add(new Label { Text = "队列同时运行的视频数（1–6）", ForeColor = muted, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 2, 3);
+
+            grid.Controls.Add(StyledLabel("Cookie 来源"), 0, 4);
+            sourceBox = StyledCombo(new[] { "浏览器", "Cookie 文件" }); sourceBox.SelectedIndex = Options.CookieMode == "file" ? 1 : 0; sourceBox.Width = 150; sourceBox.Anchor = AnchorStyles.Left | AnchorStyles.Bottom; grid.Controls.Add(sourceBox, 1, 4);
+            grid.Controls.Add(StyledLabel("浏览器"), 0, 5);
             var browsers = new[] {
                 new BrowserOption { Name="firefox", Label="Firefox" }, new BrowserOption { Name="chrome", Label="Chrome" },
                 new BrowserOption { Name="edge", Label="Edge" }, new BrowserOption { Name="brave", Label="Brave" },
@@ -99,32 +194,32 @@ namespace dotSharK
                 new BrowserOption { Name="vivaldi", Label="Vivaldi" }, new BrowserOption { Name="safari", Label="Safari" },
                 new BrowserOption { Name="whale", Label="Whale" }
             };
-            browserBox = StyledCombo(browsers.Cast<object>().ToArray()); browserBox.Width = 190; browserBox.Anchor = AnchorStyles.Left | AnchorStyles.Bottom; grid.Controls.Add(browserBox, 1, 3);
+            browserBox = StyledCombo(browsers.Cast<object>().ToArray()); browserBox.Width = 190; browserBox.Anchor = AnchorStyles.Left | AnchorStyles.Bottom; grid.Controls.Add(browserBox, 1, 5);
             string browserName = String.IsNullOrWhiteSpace(Options.CookieBrowser) ? "firefox" : Options.CookieBrowser;
             for (int i = 0; i < browserBox.Items.Count; i++) if (((BrowserOption)browserBox.Items[i]).Name == browserName) browserBox.SelectedIndex = i;
 
-            grid.Controls.Add(StyledLabel("搜索目录"), 0, 4);
-            profileRootBox = StyledTextBox(Options.CookieProfileRoot); SetBottomField(profileRootBox, true, 8); grid.Controls.Add(profileRootBox, 1, 4);
+            grid.Controls.Add(StyledLabel("搜索目录"), 0, 6);
+            profileRootBox = StyledTextBox(Options.CookieProfileRoot); SetBottomField(profileRootBox, true, 8); grid.Controls.Add(profileRootBox, 1, 6);
             var rootButtons = new TableLayoutPanel { ColumnCount = 2, RowCount = 1, BackColor = bg, Height = DarkPalette.ControlHeight, Margin = Padding.Empty, Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom };
             rootButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50)); rootButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
             var rootBrowse = StyledButton("选择", false); rootBrowse.Dock = DockStyle.Fill; rootBrowse.Margin = new Padding(0, 0, 3, 0); rootBrowse.Click += BrowseProfileRoot;
             profileSearchButton = StyledButton("搜索", true); profileSearchButton.Dock = DockStyle.Fill; profileSearchButton.Margin = new Padding(3, 0, 0, 0); profileSearchButton.Click += async (s, e) => await SearchProfiles();
-            rootButtons.Controls.Add(rootBrowse, 0, 0); rootButtons.Controls.Add(profileSearchButton, 1, 0); grid.Controls.Add(rootButtons, 2, 4);
+            rootButtons.Controls.Add(rootBrowse, 0, 0); rootButtons.Controls.Add(profileSearchButton, 1, 0); grid.Controls.Add(rootButtons, 2, 6);
 
-            grid.Controls.Add(StyledLabel("浏览器配置"), 0, 5);
+            grid.Controls.Add(StyledLabel("浏览器配置"), 0, 7);
             var profileRow = new TableLayoutPanel { ColumnCount = 2, RowCount = 1, BackColor = bg, Height = DarkPalette.ControlHeight, Margin = Padding.Empty, Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom };
             profileRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); profileRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 34));
             profileBox = StyledCombo(new object[0]); profileBox.DropDownStyle = ComboBoxStyle.DropDown; profileBox.Dock = DockStyle.Fill; profileBox.Margin = new Padding(0, 0, 5, 0); profileRow.Controls.Add(profileBox, 0, 0);
             profileFoundCheck = new Label { Text = "", ForeColor = green, Font = new Font("Segoe UI Symbol", 14F, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Visible = false, BackColor = bg };
-            profileRow.Controls.Add(profileFoundCheck, 1, 0); grid.Controls.Add(profileRow, 1, 5); grid.SetColumnSpan(profileRow, 2);
+            profileRow.Controls.Add(profileFoundCheck, 1, 0); grid.Controls.Add(profileRow, 1, 7); grid.SetColumnSpan(profileRow, 2);
             if (!String.IsNullOrWhiteSpace(Options.CookieProfile)) { profileBox.Text = Options.CookieProfile; profileBox.Items.Add(Options.CookieProfile); }
             profileStatus = new Label { Text = "默认浏览器配置自动读取；指定目录后可递归搜寻 Cookie 数据库。", ForeColor = muted, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
-            grid.Controls.Add(profileStatus, 1, 6); grid.SetColumnSpan(profileStatus, 2);
-            grid.Controls.Add(StyledLabel("Cookie 文件"), 0, 7);
-            cookieFileBox = StyledTextBox(Options.CookieFile); SetBottomField(cookieFileBox, true, 8); grid.Controls.Add(cookieFileBox, 1, 7);
-            var cookieBrowse = StyledButton("浏览…", false); SetBottomField(cookieBrowse, true, 0); cookieBrowse.Click += BrowseCookieFile; grid.Controls.Add(cookieBrowse, 2, 7);
+            grid.Controls.Add(profileStatus, 1, 8); grid.SetColumnSpan(profileStatus, 2);
+            grid.Controls.Add(StyledLabel("Cookie 文件"), 0, 9);
+            cookieFileBox = StyledTextBox(Options.CookieFile); SetBottomField(cookieFileBox, true, 8); grid.Controls.Add(cookieFileBox, 1, 9);
+            var cookieBrowse = StyledButton("浏览…", false); SetBottomField(cookieBrowse, true, 0); cookieBrowse.Click += BrowseCookieFile; grid.Controls.Add(cookieBrowse, 2, 9);
             cookieFileStatus = new Label { Text = "浏览器模式默认 Firefox。Cookie 文件需为 Netscape 格式。", ForeColor = muted, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
-            grid.Controls.Add(cookieFileStatus, 1, 8); grid.SetColumnSpan(cookieFileStatus, 2);
+            grid.Controls.Add(cookieFileStatus, 1, 10); grid.SetColumnSpan(cookieFileStatus, 2);
             page.Controls.Add(grid);
             sourceBox.SelectedIndexChanged += async (s, e) =>
             {
@@ -161,11 +256,21 @@ namespace dotSharK
             if (sourceBox.SelectedIndex == 1 && String.IsNullOrWhiteSpace(cookieFileBox.Text))
             { cookieFileStatus.Text = "请指定 Netscape 格式的 Cookie 文件。"; return; }
             var browser = browserBox.SelectedItem as BrowserOption;
-            Options.Proxy = proxy; Options.ConcurrentFragments = (int)fragmentsBox.Value;
+            string geoProxy = geoProxyBox.Text.Trim();
+            if (geoProxy.Length > 0 && !IsValidProxy(geoProxy))
+            { profileStatus.Text = "地域验证代理格式不正确，请检查协议和端口。"; return; }
+            Options.Proxy = proxy; Options.GeoVerificationProxy = geoProxy; Options.ConcurrentFragments = (int)fragmentsBox.Value; Options.ConcurrentDownloads = (int)downloadsBox.Value;
             Options.CookieMode = sourceBox.SelectedIndex == 1 ? "file" : "browser";
             Options.CookieBrowser = browser == null ? "firefox" : browser.Name;
             Options.CookieProfileRoot = profileRootBox.Text.Trim(); Options.CookieProfile = profileBox.Text.Trim(); Options.CookieFile = cookieFileBox.Text.Trim();
             DialogResult = DialogResult.OK; Close();
+        }
+
+        private static bool IsValidProxy(string value)
+        {
+            Uri uri;
+            return Uri.TryCreate(value, UriKind.Absolute, out uri) &&
+                (uri.Scheme == "http" || uri.Scheme == "https" || uri.Scheme == "socks4" || uri.Scheme == "socks4a" || uri.Scheme == "socks5" || uri.Scheme == "socks5h");
         }
 
         private async Task SearchProfiles()
@@ -460,7 +565,7 @@ namespace dotSharK
             var combo = new DarkComboBox { Height = DarkPalette.ControlHeight, Margin = Padding.Empty };
             combo.Items.AddRange(items); if (combo.Items.Count > 0) combo.SelectedIndex = 0; return combo;
         }
-        private TextBox StyledTextBox(string text) { return new DarkTextBox { Text = text ?? "", Font = Font, Multiline = false, AutoSize = false, Height = DarkPalette.ControlHeight, Margin = Padding.Empty }; }
+        private DarkTextBox StyledTextBox(string text) { return new DarkTextBox { Text = text ?? "", Font = Font, Multiline = false, AutoSize = false, Height = DarkPalette.ControlHeight, Margin = Padding.Empty }; }
         private static void SetBottomField(Control control, bool stretch, int rightMargin)
         {
             control.Dock = DockStyle.None;
