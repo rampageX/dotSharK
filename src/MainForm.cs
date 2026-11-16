@@ -114,9 +114,9 @@ namespace dotSharK
             body.Controls.Add(formatsGrid, 0, 1);
 
             var lower = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, BackColor = bg };
-            lower.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); lower.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            lower.RowStyles.Add(new RowStyle(SizeType.Absolute, 40)); lower.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             var pathRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, BackColor = bg };
-            pathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 75)); pathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); pathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
+            pathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 66)); pathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); pathRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96));
             pathRow.Controls.Add(new Label { Text = "保存到", ForeColor = muted, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
             folderBox = InputBox(); folderBox.Dock = DockStyle.Fill; folderBox.Margin = new Padding(0, 8, 0, 0); folderBox.TextChanged += (s, e) => SaveSettings(); pathRow.Controls.Add(folderBox, 1, 0);
             browseFolderButton = GhostButton("浏览…", 90); browseFolderButton.Dock = DockStyle.Fill; browseFolderButton.Margin = new Padding(0, 8, 0, 0); browseFolderButton.Click += BrowseFolder; pathRow.Controls.Add(browseFolderButton, 2, 0);

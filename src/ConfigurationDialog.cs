@@ -55,9 +55,9 @@ namespace dotSharK
         private void BuildToolsPage(Panel page, string[] values)
         {
             var content = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, BackColor = bg };
-            content.RowStyles.Add(new RowStyle(SizeType.Absolute, 180)); content.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            var grid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 5, BackColor = bg };
-            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 116)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92));
+            content.RowStyles.Add(new RowStyle(SizeType.Absolute, 150)); content.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            var grid = new TableLayoutPanel { Dock = DockStyle.Top, Height = 150, ColumnCount = 3, RowCount = 5, BackColor = bg, Margin = Padding.Empty };
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 92));
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); for (int i = 0; i < 4; i++) grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
             grid.Controls.Add(StyledLabel("程序"), 0, 0); grid.Controls.Add(StyledLabel("可执行文件路径（留空时自动检查 dotSharK 目录和 tools 子目录）"), 1, 0);
             for (int i = 0; i < 4; i++)
@@ -75,7 +75,7 @@ namespace dotSharK
         private void BuildYtPage(Panel page)
         {
             var grid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 9, BackColor = bg, Padding = new Padding(2) };
-            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 106));
+            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 106));
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
