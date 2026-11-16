@@ -8,6 +8,7 @@
     <RootNamespace>dotSharK</RootNamespace>
     <AssemblyName>dotSharK</AssemblyName>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <ApplicationIcon>Resources\dotShark.ico</ApplicationIcon>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>true</Deterministic>
   </PropertyGroup>
@@ -24,8 +25,11 @@
     <Reference Include="System.Windows.Forms"/><Reference Include="System.Web.Extensions"/><Reference Include="System.Security"/>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Program.cs"/><Compile Include="MainForm.cs"/><Compile Include="ConfigurationDialog.cs"/><Compile Include="DarkControls.cs"/><Compile Include="YtDlpClient.cs"/>
+    <Compile Include="Program.cs"/><Compile Include="AppBranding.cs"/><Compile Include="MainForm.cs"/><Compile Include="ConfigurationDialog.cs"/><Compile Include="DarkControls.cs"/><Compile Include="YtDlpClient.cs"/>
     <Compile Include="Models.cs"/><Compile Include="Properties\AssemblyInfo.cs"/>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\dotShark.ico"><LogicalName>dotSharK.Resources.dotShark.ico</LogicalName></EmbeddedResource>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

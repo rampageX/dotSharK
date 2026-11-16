@@ -35,7 +35,7 @@ namespace dotSharK
             options = options ?? new YtDlpOptions();
             Options = new YtDlpOptions { Proxy = options.Proxy, ConcurrentFragments = options.ConcurrentFragments, CookieMode = options.CookieMode,
                 CookieBrowser = options.CookieBrowser, CookieProfileRoot = options.CookieProfileRoot, CookieProfile = options.CookieProfile, CookieFile = options.CookieFile };
-            Text = "dotSharK 配置"; StartPosition = FormStartPosition.CenterParent; FormBorderStyle = FormBorderStyle.FixedDialog;
+            Text = "dotSharK 配置"; StartPosition = FormStartPosition.CenterParent; FormBorderStyle = FormBorderStyle.FixedDialog; Icon = AppBranding.CreateIcon();
             MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false; BackColor = bg; ForeColor = fg; Font = new Font("Microsoft YaHei UI", 9F); ClientSize = new Size(790, 540); MinimumSize = new Size(700, 500);
             var root = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = bg, Padding = new Padding(16), ColumnCount = 1, RowCount = 2 };
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48)); Controls.Add(root);

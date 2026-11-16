@@ -29,7 +29,7 @@ namespace dotSharK
         public MainForm()
         {
             Text = "dotSharK  ·  YouTube Downloader"; StartPosition = FormStartPosition.CenterScreen; MinimumSize = new Size(900, 680); Size = new Size(1120, 820);
-            BackColor = bg; ForeColor = fg; Font = new Font("Microsoft YaHei UI", 9F); FormBorderStyle = FormBorderStyle.Sizable; KeyPreview = true;
+            BackColor = bg; ForeColor = fg; Font = new Font("Microsoft YaHei UI", 9F); FormBorderStyle = FormBorderStyle.Sizable; KeyPreview = true; Icon = AppBranding.CreateIcon();
             BuildUi(); LoadSettings();
             ytDlpPath = ExistingOrDefault(ytDlpPath, "yt-dlp.exe");
             ffmpegPath = ExistingOrDefault(ffmpegPath, "ffmpeg.exe");
