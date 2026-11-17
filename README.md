@@ -1,4 +1,4 @@
-# dotSharK 1.0.4
+# dotSharK 1.0.5
 
 dotSharK 是一个轻量的 Windows yt-dlp 图形外壳，使用 **C#、WinForms 和 .NET Framework 4.8** 编写。程序使用暗色界面和绿色强调色，实际解析与下载由用户选择的 yt-dlp 完成。
 
@@ -47,6 +47,15 @@ dotnet build src\dotSharK.csproj -c Release
 ```
 
 构建输出位于 `src\bin\Release\dotSharK.exe`。项目不依赖 Visual Studio IDE。
+
+## 1.0.5 更新内容
+
+- 正式集成 UI V2：统一七个主要界面的暗黑主题、布局和控件。
+- 完善下载队列状态显示；新增可选的已完成任务保留，以及打开文件和下载目录。
+- 静默下载新增最高分辨率限制，保留原有 HDR、帧率、AV1 和音频策略。
+- 浏览器右键菜单支持页面、视频和链接，点击链接时发送目标网址。
+- 修复含 ™ 等 Unicode 字符的下载文件路径，并支持按视频 ID 找回旧任务文件。
+- 正式包包含 UI DLL 和浏览器插件；外部下载工具由用户自行配置。
 
 ## 1.0.4 更新内容
 

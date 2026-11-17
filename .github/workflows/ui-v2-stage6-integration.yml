@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - feature/ui-v2-redesign
+      - main
   workflow_dispatch:
 
 jobs:
@@ -10,7 +11,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 35
     permissions:
-      contents: read
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - name: Compile production application and accepted UI preview
@@ -158,3 +159,42 @@ jobs:
           name: dotSharK-ui-v2-stage6-complete-windows
           path: dotSharK_UI_V2_Stage6_Integrated_Windows.zip
           if-no-files-found: error
+
+      - name: Package and verify formal v1.0.5 distribution
+        if: github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force formal | Out-Null
+          Copy-Item src/bin/Release/dotSharK.exe formal/
+          Copy-Item src/bin/Release/DotSharK.UiFoundation.dll formal/
+          Copy-Item BrowserExtension formal/BrowserExtension -Recurse
+          Copy-Item README.md,LICENSE formal/
+          $version = (Get-Item formal/dotSharK.exe).VersionInfo.FileVersion
+          if ($version -ne '1.0.5.0') { throw "Unexpected EXE version: $version" }
+          $expected = @('BrowserExtension/Install-NativeHost.ps1','BrowserExtension/README.md','BrowserExtension/background.js','BrowserExtension/manifest.json','DotSharK.UiFoundation.dll','LICENSE','README.md','dotSharK.exe') | Sort-Object
+          $actual = @(Get-ChildItem formal -Recurse -File | ForEach-Object { [IO.Path]::GetRelativePath((Resolve-Path formal).Path,$_.FullName).Replace('\','/') }) | Sort-Object
+          if (Compare-Object $expected $actual) { throw 'Formal package file list mismatch' }
+          $actual | Set-Content Formal-File-List.txt
+          Compress-Archive -Path formal/* -DestinationPath dotSharK_v1.0.5.zip -Force
+          Expand-Archive dotSharK_v1.0.5.zip verify-formal -Force
+          foreach ($file in $expected) {
+            if ((Get-FileHash "formal/$file").Hash -ne (Get-FileHash "verify-formal/$file").Hash) { throw "ZIP round-trip mismatch: $file" }
+          }
+          $notes = (Get-Content README.md -Raw).Split('## 1.0.5 更新内容')[1].Split('## 1.0.4 更新内容')[0].Trim()
+          $notes += "`n`nWindows 10/11 · .NET Framework 4.8。解压后运行 dotSharK.exe，保持 UI DLL 同目录。外部工具不随包提供。`n`nWindows main 构建与回归：123 项通过。源码提交：$env:GITHUB_SHA"
+          $notes | Set-Content Release-Notes.md -Encoding utf8
+      - name: Publish verified formal release
+        if: github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          gh release view v1.0.5 --repo $env:GITHUB_REPOSITORY 2>$null
+          if ($LASTEXITCODE -eq 0) { throw 'v1.0.5 already exists; refusing to overwrite' }
+          gh release create v1.0.5 dotSharK_v1.0.5.zip --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'dotSharK 1.0.5' --notes-file Release-Notes.md --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Release creation failed' }
+          gh release download v1.0.5 --repo $env:GITHUB_REPOSITORY --pattern dotSharK_v1.0.5.zip --dir verify-download
+          if ($LASTEXITCODE -ne 0) { throw 'Published asset download failed' }
+          if ((Get-FileHash dotSharK_v1.0.5.zip).Hash -ne (Get-FileHash verify-download/dotSharK_v1.0.5.zip).Hash) { throw 'Published asset hash mismatch' }
