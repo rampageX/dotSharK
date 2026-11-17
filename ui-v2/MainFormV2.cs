@@ -1034,6 +1034,7 @@ namespace dotSharK
             if (!String.IsNullOrWhiteSpace(item.DisplayQuality)) quality = item.DisplayQuality;
             else item.DisplayQuality = quality;
             int row = queueGrid.Rows.Add(item.Title, source, quality, item.Status);
+            EnsureQualityWidth(quality);
             EnsureStatusWidth(item.Status);
             queueGrid.Rows[row].Tag = item; queueCountLabel.Text = "下载队列（" + queueItems.Count + "）"; UpdateQueueControls();
         }
@@ -1050,6 +1051,15 @@ namespace dotSharK
                     EnsureStatusWidth(status);
                     break;
                 }
+        }
+        private void EnsureQualityWidth(string quality)
+        {
+            // Match DarkPaint.DrawText's GDI text measurement and 12px insets.
+            int textWidth = TextRenderer.MeasureText(quality ?? "", queueGrid.Font, Size.Empty,
+                TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine).Width;
+            int required = Math.Max(Theme.QualityColumnWidth, textWidth) + Theme.Space24 + Theme.Space8;
+            var column = queueGrid.Columns["quality"];
+            if (column.Width < required) column.Width = required;
         }
         private void EnsureStatusWidth(string status)
         {

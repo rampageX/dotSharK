@@ -52,6 +52,21 @@ internal static class UiV2Stage6Acceptance
                     "source compact and status readable");
                 Check(queue.ContextMenuStrip.Items.Cast<ToolStripItem>().Any(x => x.Text == "打开下载目录"),
                     "completed menu includes open folder");
+                string qualityText = "1080p 以内 · AV1 优先";
+                Font originalFont = queue.Font;
+                foreach (float scale in new[] { 1f, 1.25f, 1.5f })
+                {
+                    using (var scaledFont = new Font(originalFont.FontFamily, originalFont.Size * scale))
+                    {
+                        queue.Font = scaledFont;
+                        main.GetType().GetMethod("EnsureQualityWidth", F).Invoke(main, new object[] { qualityText });
+                        int measured = TextRenderer.MeasureText(qualityText, queue.Font, Size.Empty,
+                            TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine).Width;
+                        Check(queue.Columns["quality"].Width - Theme.Space24 >= measured,
+                            "quality text and custom paint insets fit at font scale " + scale);
+                        queue.Font = originalFont;
+                    }
+                }
                 Save(main, "Main.png");
                 var portableOptions = Field(main, "ytdlpOptions");
                 string proxy = "socks5://user:p@ss@127.0.0.1:1080";
