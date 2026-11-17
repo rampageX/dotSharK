@@ -58,6 +58,7 @@ namespace dotSharK
     {
         public string Title, Url, Container, SubtitleLanguage, OutputFolder, Status;
         public double ProgressWeight = 1;
+        public double ProgressPercent;
         public MediaInfo Media;
         public bool AudioOnly, AutomaticSubtitle, PlaylistItem, BrowserSilent;
         public string BrowserJobPath;
