@@ -21,9 +21,10 @@ namespace dotSharK
         private TextBox proxyBox, geoProxyBox, profileRootBox, cookieFileBox;
         private DarkNumericUpDown fragmentsBox;
         private DarkNumericUpDown downloadsBox;
+        private DarkNumericUpDown qualityLimitBox;
         private DarkComboBox sourceBox, browserBox, profileBox;
         private Button profileSearchButton;
-        private Label profileStatus, cookieFileStatus, profileFoundCheck;
+        private Label profileStatus, profileFoundCheck;
         private Label toolUpdateStatus;
         private readonly List<CircularUpdateButton> toolUpdateButtons = new List<CircularUpdateButton>();
         private bool toolUpdateRunning;
@@ -38,7 +39,7 @@ namespace dotSharK
         public ConfigurationDialog(string ytDlp, string ffmpeg, string ffprobe, string deno, YtDlpOptions options)
         {
             options = options ?? new YtDlpOptions();
-            Options = new YtDlpOptions { Proxy = options.Proxy, GeoVerificationProxy = options.GeoVerificationProxy, ConcurrentFragments = options.ConcurrentFragments, ConcurrentDownloads = options.ConcurrentDownloads, CookieMode = options.CookieMode,
+            Options = new YtDlpOptions { Proxy = options.Proxy, GeoVerificationProxy = options.GeoVerificationProxy, ConcurrentFragments = options.ConcurrentFragments, ConcurrentDownloads = options.ConcurrentDownloads, VideoQualityLimit = options.VideoQualityLimit, CookieMode = options.CookieMode,
                 CookieBrowser = options.CookieBrowser, CookieProfileRoot = options.CookieProfileRoot, CookieProfile = options.CookieProfile, CookieFile = options.CookieFile };
             Text = "dotSharK 配置"; StartPosition = FormStartPosition.CenterParent; FormBorderStyle = FormBorderStyle.FixedDialog; Icon = AppBranding.CreateIcon();
             MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false; BackColor = bg; ForeColor = fg; Font = new Font("Microsoft YaHei UI", 9F); ClientSize = new Size(790, 540); MinimumSize = new Size(700, 500);
@@ -162,11 +163,11 @@ namespace dotSharK
 
         private void BuildYtPage(Panel page)
         {
-            var grid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 11, BackColor = bg, Padding = new Padding(2) };
+            var grid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 12, BackColor = bg, Padding = new Padding(2) };
             grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 106));
             for (int i = 0; i < 8; i++) grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
-            grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
             grid.Controls.Add(StyledLabel("代理"), 0, 0);
             proxyBox = StyledTextBox(Options.Proxy); SetBottomField(proxyBox, true, 0); grid.Controls.Add(proxyBox, 1, 0); grid.SetColumnSpan(proxyBox, 2);
@@ -218,8 +219,13 @@ namespace dotSharK
             grid.Controls.Add(StyledLabel("Cookie 文件"), 0, 9);
             cookieFileBox = StyledTextBox(Options.CookieFile); SetBottomField(cookieFileBox, true, 8); grid.Controls.Add(cookieFileBox, 1, 9);
             var cookieBrowse = StyledButton("浏览…", false); SetBottomField(cookieBrowse, true, 0); cookieBrowse.Click += BrowseCookieFile; grid.Controls.Add(cookieBrowse, 2, 9);
-            cookieFileStatus = new Label { Text = "浏览器模式默认 Firefox。Cookie 文件需为 Netscape 格式。", ForeColor = muted, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
-            grid.Controls.Add(cookieFileStatus, 1, 10); grid.SetColumnSpan(cookieFileStatus, 2);
+            grid.Controls.Add(StyledLabel("视频质量限制"), 0, 10);
+            var qualityLimitRow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = Padding.Empty, Padding = new Padding(0, 4, 0, 0) };
+            qualityLimitRow.Controls.Add(new Label { Text = "前：", Width = 30, Height = DarkPalette.ControlHeight, TextAlign = ContentAlignment.MiddleLeft, ForeColor = fg, Margin = Padding.Empty });
+            qualityLimitBox = new DarkNumericUpDown { Minimum = 0, Maximum = 9999, Value = Math.Max(0, Math.Min(9999, Options.VideoQualityLimit)), Width = 96, Height = DarkPalette.ControlHeight, Margin = Padding.Empty, BackColor = field, ForeColor = fg, BorderStyle = BorderStyle.FixedSingle, TextAlign = HorizontalAlignment.Center };
+            qualityLimitRow.Controls.Add(qualityLimitBox); grid.Controls.Add(qualityLimitRow, 1, 10);
+            var qualityHint = new Label { Text = "默认前三个不同分辨率档位；0 为不限制。同分辨率的不同编码、HDR 选项均保留。", ForeColor = muted, Dock = DockStyle.Fill, TextAlign = ContentAlignment.TopLeft, Padding = new Padding(0, 5, 0, 0), AutoEllipsis = true };
+            grid.Controls.Add(qualityHint, 1, 11); grid.SetColumnSpan(qualityHint, 2);
             page.Controls.Add(grid);
             sourceBox.SelectedIndexChanged += async (s, e) =>
             {
@@ -252,14 +258,14 @@ namespace dotSharK
                 { profileStatus.Text = "代理地址格式不正确，请检查协议和端口。"; return; }
             }
             if (sourceBox.SelectedIndex == 1 && !String.IsNullOrWhiteSpace(cookieFileBox.Text) && !File.Exists(cookieFileBox.Text.Trim()))
-            { cookieFileStatus.Text = "找不到指定的 Cookie 文件。"; return; }
+            { MessageBox.Show(this, "找不到指定的 Cookie 文件。", "dotSharK", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
             if (sourceBox.SelectedIndex == 1 && String.IsNullOrWhiteSpace(cookieFileBox.Text))
-            { cookieFileStatus.Text = "请指定 Netscape 格式的 Cookie 文件。"; return; }
+            { MessageBox.Show(this, "请指定 Netscape 格式的 Cookie 文件。", "dotSharK", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
             var browser = browserBox.SelectedItem as BrowserOption;
             string geoProxy = geoProxyBox.Text.Trim();
             if (geoProxy.Length > 0 && !IsValidProxy(geoProxy))
             { profileStatus.Text = "地域验证代理格式不正确，请检查协议和端口。"; return; }
-            Options.Proxy = proxy; Options.GeoVerificationProxy = geoProxy; Options.ConcurrentFragments = (int)fragmentsBox.Value; Options.ConcurrentDownloads = (int)downloadsBox.Value;
+            Options.Proxy = proxy; Options.GeoVerificationProxy = geoProxy; Options.ConcurrentFragments = (int)fragmentsBox.Value; Options.ConcurrentDownloads = (int)downloadsBox.Value; Options.VideoQualityLimit = (int)qualityLimitBox.Value;
             Options.CookieMode = sourceBox.SelectedIndex == 1 ? "file" : "browser";
             Options.CookieBrowser = browser == null ? "firefox" : browser.Name;
             Options.CookieProfileRoot = profileRootBox.Text.Trim(); Options.CookieProfile = profileBox.Text.Trim(); Options.CookieFile = cookieFileBox.Text.Trim();
