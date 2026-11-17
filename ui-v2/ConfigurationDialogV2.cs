@@ -102,14 +102,15 @@ namespace dotSharK
                 var footer = new TableLayoutPanel
                 {
                     Dock = DockStyle.Fill, Margin = Padding.Empty,
-                    Padding = new Padding(0, Theme.Space16, 0, Theme.Space16),
-                    ColumnCount = 4, RowCount = 2, BackColor = Theme.Window
+                    Padding = new Padding(0, 0, 0, Theme.Space16),
+                    ColumnCount = 4, RowCount = 3, BackColor = Theme.Window
                 };
                 footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
                 footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.FooterButtonWidth));
                 footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.Space8));
                 footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.FooterButtonWidth));
                 footer.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.BorderWidth));
+                footer.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space16));
                 footer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
                 var divider = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty,
                     BackColor = Theme.Divider };
@@ -124,8 +125,8 @@ namespace dotSharK
                 cancel.Dock = save.Dock = DockStyle.Fill;
                 cancel.Margin = save.Margin = Padding.Empty;
                 save.Click += SaveClicked;
-                footer.Controls.Add(cancel, 1, 1);
-                footer.Controls.Add(save, 3, 1);
+                footer.Controls.Add(cancel, 1, 2);
+                footer.Controls.Add(save, 3, 2);
                 root.Controls.Add(footer, 0, 1);
                 AssignDialogButtons(save, cancel);
                 ActiveControl = tabs;
@@ -244,8 +245,10 @@ namespace dotSharK
                 browse.Name = "btnBrowseTool" + i;
                 browse.Click += (s, e) => BrowseTool(index);
                 var stable = new IconButton { Nightly = false,
+                    Name = "btnUpdateStable" + i,
                     AccessibleName = toolNames[i] + " 更新稳定版" };
                 var nightly = new IconButton { Nightly = true,
+                    Name = "btnUpdateNightly" + i,
                     AccessibleName = toolNames[i] + " 更新 Nightly" };
                 if (i < 4)
                 {
