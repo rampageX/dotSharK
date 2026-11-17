@@ -3,9 +3,18 @@ param(
     [Parameter(Mandatory = $true)]
     [ValidatePattern('^[a-p]{32}$')]
     [string] $ExtensionId,
-    [string] $ExePath = (Join-Path (Split-Path -Parent $PSScriptRoot) 'dotSharK.exe')
+    [string] $ExePath
 )
 $ErrorActionPreference = 'Stop'
+# Parameter defaults are evaluated before script automatic variables are fully available.
+# Resolve the portable EXE path after entering the script body.
+if ([string]::IsNullOrWhiteSpace($ExePath)) {
+    $scriptDirectory = Split-Path -Parent $MyInvocation.MyCommand.Path
+    $ExePath = Join-Path (Split-Path -Parent $scriptDirectory) 'dotSharK.exe'
+}
+if (-not (Test-Path -LiteralPath $ExePath -PathType Leaf)) {
+    throw "dotSharK.exe not found: $ExePath"
+}
 $exe = (Resolve-Path -LiteralPath $ExePath).ProviderPath
 if ([IO.Path]::GetFileName($exe) -ne 'dotSharK.exe') {
     throw 'ExePath must point to dotSharK.exe.'
