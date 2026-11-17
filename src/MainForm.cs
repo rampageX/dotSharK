@@ -438,7 +438,7 @@ namespace dotSharK
                                 };
                                 if (item.BrowserSilent)
                                     await client.DownloadSilentAsync(item.Url, item.OutputFolder,
-                                        SilentDownloadBridge.ArchivePath, ytdlpOptions, output, linkedToken.Token);
+                                        ytdlpOptions, output, linkedToken.Token);
                                 else if (item.PlaylistItem)
                                     await client.DownloadPlaylistItemAsync(item, ytdlpOptions, output, linkedToken.Token);
                                 else
