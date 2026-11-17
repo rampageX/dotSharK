@@ -401,6 +401,9 @@ namespace dotSharK
         private readonly Panel arrow = new Panel();
         private readonly ToolStripDropDown popup;
         private readonly ListBox list = new ListBox();
+        private readonly ToolTip fullTextTip = new ToolTip { ShowAlways = true, InitialDelay = 500, ReshowDelay = 120, AutoPopDelay = 12000 };
+        private readonly System.Windows.Forms.Timer listTipTimer = new System.Windows.Forms.Timer { Interval = 500 };
+        private int hoveredListIndex = -1;
         private bool syncing;
         private bool hover;
         private int selectedIndex = -1;
@@ -468,13 +471,33 @@ namespace dotSharK
                 if (ClearSelectionOnFocus && editor.IsHandleCreated)
                     editor.BeginInvoke((Action)(() => { if (!editor.IsDisposed && editor.Focused) editor.SelectionLength = 0; }));
             };
-            editor.TextChanged += (s, e) => { if (!syncing && dropDownStyle == ComboBoxStyle.DropDown) { selectedIndex = -1; EventHandler h = SelectedIndexChanged; if (h != null) h(this, EventArgs.Empty); } };
+            editor.TextChanged += (s, e) =>
+            {
+                UpdateSelectedTip();
+                if (!syncing && dropDownStyle == ComboBoxStyle.DropDown) { selectedIndex = -1; EventHandler h = SelectedIndexChanged; if (h != null) h(this, EventArgs.Empty); }
+            };
             editor.MouseDown += (s, e) => { if (dropDownStyle != ComboBoxStyle.DropDown) TogglePopup(); };
             editor.KeyDown += EditorKeyDown;
             arrow.BackColor = DarkPalette.Field; arrow.Cursor = Cursors.Hand; arrow.Paint += PaintArrow; arrow.Click += (s, e) => TogglePopup();
             Controls.Add(editor); Controls.Add(arrow);
             list.BorderStyle = BorderStyle.None; list.BackColor = DarkPalette.Field; list.ForeColor = DarkPalette.Foreground; list.DrawMode = DrawMode.OwnerDrawFixed; list.ItemHeight = 26; list.IntegralHeight = false; list.Font = Font;
-            list.DrawItem += DrawListItem; list.Click += (s, e) => { if (list.SelectedIndex >= 0) { SelectedIndex = list.SelectedIndex; popup.Close(); editor.Focus(); } };
+            list.DrawItem += DrawListItem;
+            list.MouseMove += (s, e) =>
+            {
+                int index = list.IndexFromPoint(e.Location);
+                if (index == hoveredListIndex) return;
+                hoveredListIndex = index;
+                listTipTimer.Stop(); fullTextTip.Hide(list);
+                if (index >= 0 && index < list.Items.Count)
+                {
+                    // Hover changes the visual highlight only; clicking/Enter commits the choice.
+                    list.SelectedIndex = index;
+                    string label = Display(list.Items[index]);
+                    if (IsClipped(label, list.Font, list.ClientSize.Width - 16)) listTipTimer.Start();
+                }
+            };
+            list.MouseLeave += (s, e) => ClearListHover();
+            list.Click += (s, e) => { if (list.SelectedIndex >= 0) { SelectedIndex = list.SelectedIndex; popup.Close(); editor.Focus(); } };
             list.KeyDown += (s, e) =>
             {
                 if (e.KeyCode == Keys.Enter && list.SelectedIndex >= 0) { SelectedIndex = list.SelectedIndex; popup.Close(); editor.Focus(); e.Handled = true; }
@@ -483,7 +506,14 @@ namespace dotSharK
             popup = new ToolStripDropDown { AutoClose = true, BackColor = DarkPalette.Border, Padding = new Padding(1), Margin = Padding.Empty, Renderer = new DarkDropDownRenderer() };
             var host = new ToolStripControlHost(list) { AutoSize = false, Margin = Padding.Empty, Padding = Padding.Empty, Size = new Size(240, 26 * 6) };
             popup.Items.Add(host);
-            popup.Closed += (s, e) => { if (!IsDisposed && IsHandleCreated && Enabled) editor.Focus(); };
+            listTipTimer.Tick += (s, e) =>
+            {
+                listTipTimer.Stop();
+                if (!popup.Visible || hoveredListIndex < 0 || hoveredListIndex >= list.Items.Count) return;
+                Rectangle item = list.GetItemRectangle(hoveredListIndex);
+                fullTextTip.Show(Display(list.Items[hoveredListIndex]), list, list.ClientSize.Width + 4, item.Top, 12000);
+            };
+            popup.Closed += (s, e) => { ClearListHover(); if (!IsDisposed && IsHandleCreated && Enabled) editor.Focus(); };
             NativeDarkTheme.ApplyOnHandleCreated(list, "DarkMode_Explorer");
             SizeChanged += (s, e) => LayoutParts(); LayoutParts();
             MouseEnter += HoverEnter; MouseLeave += HoverLeave; editor.MouseEnter += HoverEnter; editor.MouseLeave += HoverLeave; arrow.MouseEnter += HoverEnter; arrow.MouseLeave += HoverLeave;
@@ -499,6 +529,27 @@ namespace dotSharK
         {
             int arrowWidth = 25; editor.Bounds = new Rectangle(8, Math.Max(1, (Height - editor.PreferredHeight) / 2), Math.Max(0, Width - arrowWidth - 12), editor.PreferredHeight);
             arrow.Bounds = new Rectangle(Math.Max(0, Width - arrowWidth), 1, Math.Max(0, arrowWidth - 1), Math.Max(0, Height - 2));
+            UpdateSelectedTip();
+        }
+        private static bool IsClipped(string text, Font font, int availableWidth)
+        {
+            return !String.IsNullOrEmpty(text) &&
+                TextRenderer.MeasureText(text, font, new Size(Int32.MaxValue, Int32.MaxValue), TextFormatFlags.NoPadding | TextFormatFlags.SingleLine).Width > Math.Max(0, availableWidth);
+        }
+        private void UpdateSelectedTip()
+        {
+            if (editor == null || arrow == null || fullTextTip == null) return;
+            string text = editor.Text;
+            string tip = IsClipped(text, editor.Font, editor.ClientSize.Width) ? text : "";
+            fullTextTip.SetToolTip(editor, tip);
+            fullTextTip.SetToolTip(arrow, tip);
+            fullTextTip.SetToolTip(this, tip);
+        }
+        private void ClearListHover()
+        {
+            hoveredListIndex = -1;
+            listTipTimer.Stop();
+            fullTextTip.Hide(list);
         }
         protected override void OnFontChanged(EventArgs e) { base.OnFontChanged(e); if (editor != null) { editor.Font = Font; if (list != null) list.Font = Font; LayoutParts(); } }
         protected override void OnPaintBackground(PaintEventArgs e) { using (Brush b = new SolidBrush(Enabled ? DarkPalette.Field : DarkPalette.Surface)) e.Graphics.FillRectangle(b, ClientRectangle); }
@@ -525,6 +576,7 @@ namespace dotSharK
         {
             if (!Enabled || Items.Count == 0) return;
             if (popup.Visible) { popup.Close(); return; }
+            ClearListHover();
             list.BeginUpdate(); list.Items.Clear(); foreach (object item in EnumerableItems()) list.Items.Add(item); list.SelectedIndex = selectedIndex; list.EndUpdate();
             int height = Math.Min(26 * Math.Min(Items.Count, 8), Screen.FromControl(this).WorkingArea.Height / 2);
             ToolStripControlHost host = (ToolStripControlHost)popup.Items[0]; host.Size = new Size(Math.Max(Width - 2, 150), height);
@@ -548,7 +600,11 @@ namespace dotSharK
             Point p = PointToClient(Cursor.Position); hover = ClientRectangle.Contains(p); Invalidate(); arrow.Invalidate();
         }
         protected override void OnMouseDown(MouseEventArgs e) { base.OnMouseDown(e); if (e.Button == MouseButtons.Left) TogglePopup(); }
-        protected override void Dispose(bool disposing) { if (disposing && popup != null) popup.Dispose(); base.Dispose(disposing); }
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) { listTipTimer.Dispose(); fullTextTip.Dispose(); if (popup != null) popup.Dispose(); }
+            base.Dispose(disposing);
+        }
 
         private sealed class DarkDropDownRenderer : ToolStripProfessionalRenderer
         {
