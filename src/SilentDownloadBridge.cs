@@ -19,7 +19,6 @@ namespace dotSharK
             AppDomain.CurrentDomain.BaseDirectory, "SilentQueue");
         private static readonly string Pending = Path.Combine(DataRoot, "Pending");
         private static readonly string Active = Path.Combine(DataRoot, "Active");
-        private static readonly string Archive = Path.Combine(DataRoot, "downloaded.txt");
         private static readonly string ShowRequest = Path.Combine(DataRoot, "show-main.request");
         private static readonly string InstanceMutex = CreateInstanceMutex();
 
@@ -37,7 +36,6 @@ namespace dotSharK
             internal string JobPath;
         }
 
-        internal static string ArchivePath { get { return Archive; } }
 
         internal static bool IsNativeHostCall(string[] args)
         {

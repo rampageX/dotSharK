@@ -87,6 +87,6 @@ yt-dlp 项目与使用说明：<https://github.com/yt-dlp/yt-dlp>
 
 ## 便携测试版
 
-任务和去重档案：`SilentQueue/Pending`、`SilentQueue/Active`、`SilentQueue/downloaded.txt`；托盘日志：`Logs/tray-ui.log`。配置与已完成任务仍位于 EXE 同级。不同程序目录独立运行。旧 AppData 记录不自动迁移。
+任务记录：`SilentQueue/Pending`、`SilentQueue/Active`，不使用已下载档案拦截重复下载；托盘日志：`Logs/tray-ui.log`。配置与已完成任务仍位于 EXE 同级。不同程序目录独立运行。旧 AppData 记录不自动迁移。
 
 浏览器 Native Host 清单在 `BrowserExtension/NativeMessaging`；浏览器集成仍需注册，移动程序或换电脑需重跑安装脚本。自定义工具、Cookie、下载位置若配置为绝对路径，换盘或换电脑需调整；浏览器 Cookie 仍由浏览器自身管理。

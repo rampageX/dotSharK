@@ -36,7 +36,6 @@ internal static class UiV2Stage6Acceptance
             var bridge = Type("SilentDownloadBridge");
             string expectedRoot = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SilentQueue");
             Check((string)bridge.GetField("DataRoot", F).GetValue(null) == expectedRoot, "portable queue anchored to EXE directory");
-            Check((string)bridge.GetProperty("ArchivePath", F).GetValue(null, null) == Path.Combine(expectedRoot, "downloaded.txt"), "portable archive anchored to queue");
             Check((string)Type("SilentTrayContext").GetField("UiLog", F).GetValue(null) == Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Logs", "tray-ui.log"), "portable tray log anchored to EXE directory");
             var media = Media();
             var playlist = Playlist();
@@ -411,20 +410,20 @@ internal static class UiV2Stage6Acceptance
             var silent = Path.Combine(folder, "Silent");
             Directory.CreateDirectory(silent);
             var download = (Task)Invoke(client, "DownloadSilentAsync", server.Url, silent,
-                Path.Combine(folder, "archive.txt"), opt,
+                opt,
                 (Action<string>)(line => Console.WriteLine("yt-dlp: " + line)),
                 CancellationToken.None);
             Pump(download, "silent yt-dlp local HTTP transfer");
             Check(Directory.GetFiles(silent, "*.mp4").Length == 1, "real silent download wrote MP4");
-            var skipLog = new List<string>();
-            var skippedTask = (Task)Invoke(client, "DownloadSilentAsync", server.Url, silent,
-                Path.Combine(folder, "archive.txt"), opt,
-                (Action<string>)(line => { lock (skipLog) skipLog.Add(line); }), CancellationToken.None);
-            Pump(skippedTask, "repeat archived URL");
-            Check((bool)skippedTask.GetType().GetProperty("Result").GetValue(skippedTask, null), "archive repeat returns explicit skip outcome");
-            Check(skipLog.Any(line => line.Contains("has already been recorded in the archive")), "archive skip diagnostics visible despite print metadata options");
-            Check(skipLog.Any(line => line.StartsWith("[跳过]")), "archive skip has readable Chinese explanation");
-
+            string firstFile = Directory.GetFiles(silent, "*.mp4")[0];
+            File.Delete(firstFile);
+            var repeatLog = new List<string>();
+            var repeat = (Task)Invoke(client, "DownloadSilentAsync", server.Url, silent, opt,
+                (Action<string>)(line => { lock (repeatLog) repeatLog.Add(line); }), CancellationToken.None);
+            Pump(repeat, "download same URL after deleting file");
+            Check(Directory.GetFiles(silent, "*.mp4").Length == 1, "same URL downloads again after file deletion");
+            Check(!File.Exists(Path.Combine(silent, "downloaded.txt")), "no download archive created");
+            Check(repeatLog.Any(line => line.Contains("[download]")), "normal yt-dlp download diagnostics remain visible");
             using (var main = NewForm("MainFormV2"))
             {
                 Show(main);

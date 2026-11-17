@@ -663,8 +663,8 @@ namespace dotSharK
                                     ReportDownloadLine(item, itemProgress, lineText);
                                 };
                                 if (item.BrowserSilent)
-                                    item.ArchiveSkipped = await client.DownloadSilentAsync(item.Url, item.OutputFolder,
-                                        SilentDownloadBridge.ArchivePath, ytdlpOptions, output, linkedToken.Token);
+                                    await client.DownloadSilentAsync(item.Url, item.OutputFolder,
+                                        ytdlpOptions, output, linkedToken.Token);
                                 else if (item.PlaylistItem)
                                     await client.DownloadPlaylistItemAsync(item, ytdlpOptions, output, linkedToken.Token);
                                 else
@@ -1035,7 +1035,7 @@ namespace dotSharK
             else item.DisplaySource = source;
             if (!String.IsNullOrWhiteSpace(item.DisplayQuality)) quality = item.DisplayQuality;
             else item.DisplayQuality = quality;
-            int row = queueGrid.Rows.Add(item.Title, source, quality, item.ArchiveSkipped ? "已下载，跳过" : item.Status);
+            int row = queueGrid.Rows.Add(item.Title, source, quality, item.Status);
             EnsureTextColumnWidth("source", source, Theme.SourceColumnWidth);
             EnsureQualityWidth(quality);
             EnsureStatusWidth(item.Status);
@@ -1047,7 +1047,7 @@ namespace dotSharK
                 if (ReferenceEquals(row.Tag, item))
                 {
                     row.Cells[0].Value = item.Title;
-                    string status = item.ArchiveSkipped && item.Status == "已完成" ? "已下载，跳过" : item.Status == "下载中" && item.ProgressPercent > 0
+                    string status = item.Status == "下载中" && item.ProgressPercent > 0
                         ? "下载中 " + item.ProgressPercent.ToString("0.#", CultureInfo.InvariantCulture) + "%"
                         : item.Status;
                     row.Cells[3].Value = status;

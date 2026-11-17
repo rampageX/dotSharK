@@ -14,7 +14,6 @@ namespace dotSharK
         private sealed class Record
         {
             public string Title { get; set; }
-            public bool ArchiveSkipped { get; set; }
             public string Source { get; set; }
             public string Quality { get; set; }
             public string OutputFolder { get; set; }
@@ -33,7 +32,7 @@ namespace dotSharK
                 if (record == null || String.IsNullOrWhiteSpace(record.Title)) continue;
                 result.Add(new DownloadQueueItem
                 {
-                    ArchiveSkipped = record.ArchiveSkipped, Title = record.Title, DisplaySource = record.Source,
+                    Title = record.Title, DisplaySource = record.Source,
                     DisplayQuality = record.Quality, OutputFolder = record.OutputFolder,
                     FilePath = record.FilePath, ProgressPercent = 100, Status = "已完成"
                 });
@@ -46,7 +45,7 @@ namespace dotSharK
             var records = completed.Where(item => item != null && item.Status == "已完成")
                 .Select(item => new Record
                 {
-                    ArchiveSkipped = item.ArchiveSkipped, Title = item.Title, Source = item.DisplaySource,
+                    Title = item.Title, Source = item.DisplaySource,
                     Quality = item.DisplayQuality, OutputFolder = item.OutputFolder,
                     FilePath = item.FilePath
                 }).ToList();

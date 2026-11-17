@@ -69,7 +69,7 @@ namespace dotSharK
         public double ProgressWeight = 1;
         public double ProgressPercent;
         public MediaInfo Media;
-        public bool AudioOnly, AutomaticSubtitle, PlaylistItem, BrowserSilent, ArchiveSkipped;
+        public bool AudioOnly, AutomaticSubtitle, PlaylistItem, BrowserSilent;
         public string BrowserJobPath;
         public bool PauseRequested;
         public string OriginPageUrl;
