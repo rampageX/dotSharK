@@ -64,6 +64,9 @@ internal static class UiV2Stage6Acceptance
                 Check(Find<Button>(settings, "btnSave") != null, "configuration has save action");
                 Check(Find<DarkCheckBox>(settings, "chkKeepCompleted") != null,
                     "advanced settings has completed-history option");
+                Check(Find<DarkCheckBox>(settings, "chkKeepCompleted").Width > 250 &&
+                    Find<DarkCheckBox>(settings, "chkKeepCompleted").Text == "重启后保留已完成任务",
+                    "advanced history checkbox caption has full visible width");
                 Check(Find<DarkComboBox>(settings, "cboSilentMaxResolution").SelectedIndex == 0,
                     "silent quality defaults to highest");
             }

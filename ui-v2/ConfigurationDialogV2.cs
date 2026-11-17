@@ -623,6 +623,10 @@ namespace dotSharK
 
             keepCompletedBox = StyledToggle("重启后保留已完成任务", Options.KeepCompletedTasks);
             keepCompletedBox.Name = "chkKeepCompleted";
+            // Standalone checkboxes do not autosize; fill the entire row so the
+            // Chinese caption renders, not only the 16px checkmark square.
+            keepCompletedBox.Dock = DockStyle.Fill;
+            keepCompletedBox.Margin = Padding.Empty;
             root.Controls.Add(keepCompletedBox, 0, 0);
             root.SetColumnSpan(keepCompletedBox, 3);
             root.Controls.Add(Label("使用 aria2c 下载的站点", true), 0, 2);
