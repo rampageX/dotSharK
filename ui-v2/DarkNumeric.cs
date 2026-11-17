@@ -23,7 +23,7 @@ namespace dotSharK.UiV2
             MinimumSize = new Size(Theme.Space24 * 2, Theme.ControlHeight);
             TabStop = false;
             Padding = new Padding(Theme.Space8, Theme.Space4,
-                Theme.ArrowRegionWidth + Theme.Space4, Theme.Space4);
+                Theme.NumericArrowWidth + Theme.Space4, Theme.Space4);
             input = new TextBox
             {
                 Dock = DockStyle.Fill, BorderStyle = BorderStyle.None,
@@ -88,7 +88,7 @@ namespace dotSharK.UiV2
         {
             base.OnMouseDown(e);
             if (e.Button != MouseButtons.Left || !Enabled || ReadOnly ||
-                e.X < Width - Theme.ArrowRegionWidth) return;
+                e.X < Width - Theme.NumericArrowWidth) return;
             spinDirection = e.Y < Height / 2 ? 1 : -1;
             Step(spinDirection);
             repeat.Interval = 450;
@@ -99,15 +99,15 @@ namespace dotSharK.UiV2
         protected override void OnMouseUp(MouseEventArgs e) { base.OnMouseUp(e); StopRepeat(); Invalidate(); }
         protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); hovered = false; if (spinDirection != 0) StopRepeat(); Invalidate(); }
         protected override void OnMouseMove(MouseEventArgs e)
-        { base.OnMouseMove(e); hovered = e.X >= Width - Theme.ArrowRegionWidth; Invalidate(); }
+        { base.OnMouseMove(e); hovered = e.X >= Width - Theme.NumericArrowWidth; Invalidate(); }
         protected override void OnMouseWheel(MouseEventArgs e) { base.OnMouseWheel(e); Step(Math.Sign(e.Delta)); }
         protected override void OnEnabledChanged(EventArgs e)
         { base.OnEnabledChanged(e); input.Enabled = Enabled; Invalidate(); }
         protected override void OnPaint(PaintEventArgs e)
         {
             e.Graphics.Clear(Theme.Input);
-            Rectangle spin = new Rectangle(Width - Theme.ArrowRegionWidth, 0,
-                Theme.ArrowRegionWidth, Height);
+            Rectangle spin = new Rectangle(Width - Theme.NumericArrowWidth, 0,
+                Theme.NumericArrowWidth, Height);
             using (var brush = new SolidBrush(hovered ? Theme.Hover : Theme.Panel))
                 e.Graphics.FillRectangle(brush, spin);
             using (var p = new Pen(Theme.Divider))
