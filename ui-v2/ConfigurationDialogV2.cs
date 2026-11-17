@@ -239,7 +239,15 @@ namespace dotSharK
         private static void MountPage(Panel page, Control body)
         {
             var table = body as TableLayoutPanel;
-            if (table != null) table.AutoSize = false;
+            if (table != null)
+            {
+                table.AutoSize = false;
+                // All visible rows use fixed design-token heights. Consume
+                // surplus room in one EMPTY percent row at the bottom:
+                // never let WinForms stretch the last explanation label.
+                table.RowCount += 1;
+                table.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            }
             body.Dock = DockStyle.Fill;
             body.Margin = Padding.Empty;
             page.Controls.Add(body);
