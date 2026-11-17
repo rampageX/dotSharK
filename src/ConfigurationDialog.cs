@@ -114,7 +114,7 @@ namespace dotSharK
             toolUpdateStatus.Text = "正在检查 " + toolNames[toolIndex] + " " + channel + " 版本…";
             try
             {
-                ExternalToolUpdater.UpdateCheckResult check = await ExternalToolUpdater.CheckAsync(toolIndex, nightly, target, proxyBox.Text.Trim());
+                ExternalToolUpdater.UpdateCheckResult check = await ExternalToolUpdater.CheckAsync(toolIndex, nightly, target, (proxyEnabledBox.Checked ? proxyBox.Text.Trim() : ""));
                 DialogResult choice = ShowUpdateVersionDialog(toolNames[toolIndex], channel, check);
                 if (choice == DialogResult.Cancel)
                 {
@@ -127,8 +127,8 @@ namespace dotSharK
                     toolUpdateStatus.Text = "当前版本已是最新或更新；如需重新安装，请选择“强制更新”。";
                     return;
                 }
-                toolUpdateStatus.Text = "正在通过主代理下载 " + toolNames[toolIndex] + " " + channel + "…";
-                string version = await ExternalToolUpdater.UpdateAsync(toolIndex, nightly, target, proxyBox.Text.Trim());
+                toolUpdateStatus.Text = "正在下载 " + toolNames[toolIndex] + " " + channel + (proxyEnabledBox.Checked ? "（通过主代理）…" : "（直连）…");
+                string version = await ExternalToolUpdater.UpdateAsync(toolIndex, nightly, target, (proxyEnabledBox.Checked ? proxyBox.Text.Trim() : ""));
                 toolUpdateStatus.ForeColor = green;
                 toolUpdateStatus.Text = "更新完成 · " + toolNames[toolIndex] + " · " + version + " · " + target;
             }
