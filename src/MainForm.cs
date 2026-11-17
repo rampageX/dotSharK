@@ -31,12 +31,23 @@ namespace dotSharK
         private readonly Dictionary<DownloadQueueItem, double> currentRunProgress = new Dictionary<DownloadQueueItem, double>();
         private List<DownloadQueueItem> currentRunItems = new List<DownloadQueueItem>();
         private readonly string settingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "dotSharK.ini");
+        private WindowPlacement savedMainWindow, savedPlaylistWindow;
+        private bool lastMainMaximized;
 
         public MainForm()
         {
             Text = "dotSharK  ·  YouTube Downloader"; StartPosition = FormStartPosition.CenterScreen; MinimumSize = new Size(900, 680); Size = new Size(1120, 820);
             BackColor = bg; ForeColor = fg; Font = new Font("Microsoft YaHei UI", 9F); FormBorderStyle = FormBorderStyle.Sizable; KeyPreview = true; Icon = AppBranding.CreateIcon();
             BuildUi(); LoadSettings();
+            if (savedMainWindow != null)
+            {
+                savedMainWindow.Restore(this);
+                lastMainMaximized = savedMainWindow.Maximized;
+            }
+            Resize += (s, e) =>
+            {
+                if (WindowState != FormWindowState.Minimized) lastMainMaximized = WindowState == FormWindowState.Maximized;
+            };
             ytDlpPath = ExistingOrDefault(ytDlpPath, "yt-dlp.exe");
             ffmpegPath = ExistingOrDefault(ffmpegPath, "ffmpeg.exe");
             ffprobePath = ExistingOrDefault(ffprobePath, "ffprobe.exe");
@@ -193,6 +204,18 @@ namespace dotSharK
             string playlistFolder = Path.Combine(GetOutputFolder(), SafeFolderName(playlist.Title));
             using (var dialog = new PlaylistSelectionDialog(playlist, sample, playlistFolder))
             {
+                bool lastPlaylistMaximized = savedPlaylistWindow != null && savedPlaylistWindow.Maximized;
+                if (savedPlaylistWindow != null) savedPlaylistWindow.Restore(dialog);
+                dialog.Resize += (s, e) =>
+                {
+                    if (dialog.WindowState != FormWindowState.Minimized)
+                        lastPlaylistMaximized = dialog.WindowState == FormWindowState.Maximized;
+                };
+                dialog.FormClosing += (s, e) =>
+                {
+                    savedPlaylistWindow = WindowPlacement.Capture(dialog, lastPlaylistMaximized);
+                    SaveSettings();
+                };
                 if (dialog.ShowDialog(this) != DialogResult.OK) { SetState("已取消选择播放列表。"); return; }
                 foreach (var item in dialog.QueueItems) AddQueueItem(item);
                 SetState(String.Format("已加入队列 · {0} 个视频", dialog.QueueItems.Count));
@@ -525,6 +548,8 @@ namespace dotSharK
                         else if (key == "fragments") { int n; if (Int32.TryParse(value, out n)) ytdlpOptions.ConcurrentFragments = Math.Max(1, Math.Min(32, n)); }
                         else if (key == "downloads") { int n; if (Int32.TryParse(value, out n)) ytdlpOptions.ConcurrentDownloads = Math.Max(1, Math.Min(6, n)); }
                         else if (key == "video-quality-limit") { int n; if (Int32.TryParse(value, out n)) ytdlpOptions.VideoQualityLimit = Math.Max(0, Math.Min(9999, n)); }
+                        else if (key == "main-window") savedMainWindow = WindowPlacement.Parse(value);
+                        else if (key == "playlist-window") savedPlaylistWindow = WindowPlacement.Parse(value);
                         else if (key == "cookie-mode") ytdlpOptions.CookieMode = value == "file" ? "file" : "browser";
                         else if (key == "cookie-browser") ytdlpOptions.CookieBrowser = value;
                         else if (key == "cookie-root") ytdlpOptions.CookieProfileRoot = value;
@@ -543,13 +568,17 @@ namespace dotSharK
             {
                 string protectedProxy = Convert.ToBase64String(System.Security.Cryptography.ProtectedData.Protect(System.Text.Encoding.UTF8.GetBytes(ytdlpOptions.Proxy ?? ""), null, System.Security.Cryptography.DataProtectionScope.CurrentUser));
                 string protectedGeoProxy = Convert.ToBase64String(System.Security.Cryptography.ProtectedData.Protect(System.Text.Encoding.UTF8.GetBytes(ytdlpOptions.GeoVerificationProxy ?? ""), null, System.Security.Cryptography.DataProtectionScope.CurrentUser));
+                savedMainWindow = WindowPlacement.Capture(this, lastMainMaximized);
                 File.WriteAllLines(settingsPath, new[] { "proxy=" + protectedProxy,
                     "geo-proxy=" + protectedGeoProxy,
                     "folder=" + Uri.EscapeDataString(folderBox == null ? "" : folderBox.Text),
                     "yt-dlp=" + Uri.EscapeDataString(ytDlpPath), "ffmpeg=" + Uri.EscapeDataString(ffmpegPath),
                     "ffprobe=" + Uri.EscapeDataString(ffprobePath), "deno=" + Uri.EscapeDataString(denoPath),
                     "fragments=" + ytdlpOptions.ConcurrentFragments, "downloads=" + Math.Max(1, Math.Min(6, ytdlpOptions.ConcurrentDownloads)),
-                    "video-quality-limit=" + ytdlpOptions.VideoQualityLimit, "cookie-mode=" + ytdlpOptions.CookieMode,
+                    "video-quality-limit=" + ytdlpOptions.VideoQualityLimit,
+                    "main-window=" + savedMainWindow.Serialize(),
+                    "playlist-window=" + (savedPlaylistWindow == null ? "" : savedPlaylistWindow.Serialize()),
+                    "cookie-mode=" + ytdlpOptions.CookieMode,
                     "cookie-browser=" + Uri.EscapeDataString(ytdlpOptions.CookieBrowser ?? "firefox"),
                     "cookie-root=" + Uri.EscapeDataString(ytdlpOptions.CookieProfileRoot ?? ""),
                     "cookie-profile=" + Uri.EscapeDataString(ytdlpOptions.CookieProfile ?? ""),
