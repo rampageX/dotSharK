@@ -14,6 +14,23 @@ namespace dotSharK
 {
     internal sealed class MainForm : Form
     {
+        // Handle the native minimize command before WinForms moves the window
+        // off-screen. The tray owner performs one smooth hide operation.
+        internal event EventHandler TrayMinimizeRequested;
+        protected override void WndProc(ref Message m)
+        {
+            const int WmSysCommand = 0x0112;
+            const long ScMinimize = 0xF020;
+            if (m.Msg == WmSysCommand && (m.WParam.ToInt64() & 0xFFF0L) == ScMinimize &&
+                TrayMinimizeRequested != null && Visible && !IsDisposed)
+            {
+                TrayMinimizeRequested(this, EventArgs.Empty);
+                m.Result = IntPtr.Zero;
+                return;
+            }
+            base.WndProc(ref m);
+        }
+
         private readonly Color bg = Color.FromArgb(34, 34, 34), panel = Color.FromArgb(43, 43, 43), green = DarkPalette.Accent, muted = Color.FromArgb(153, 163, 170), fg = Color.FromArgb(235, 238, 240), line = Color.FromArgb(65, 65, 65);
         private DarkTextBox urlBox, folderBox, logBox;
         private DarkButton analyzeButton;
@@ -25,7 +42,9 @@ namespace dotSharK
         private readonly List<DownloadQueueItem> queueItems = new List<DownloadQueueItem>();
         private YtDlpClient client;
         private YtDlpOptions ytdlpOptions = new YtDlpOptions();
-        private string ytDlpPath = "", ffmpegPath = "", ffprobePath = "", denoPath = "";
+        private string ytDlpPath = "", ffmpegPath = "", ffprobePath = "", denoPath = "", aria2cPath = "";
+        private readonly Dictionary<DownloadQueueItem, CancellationTokenSource> itemCancellation =
+            new Dictionary<DownloadQueueItem, CancellationTokenSource>();
         private bool loadingSettings;
         private bool downloadRunning;
         private bool queueStopRequested;
@@ -38,6 +57,45 @@ namespace dotSharK
         private readonly System.Windows.Forms.Timer clipboardWatchTimer = new System.Windows.Forms.Timer { Interval = 550 };
         private string clipboardCandidateUrl;
         private bool clipboardFlashBright;
+        private bool browserAutoRunRequested;
+
+        internal int ActiveDownloadCount { get { return queueItems.Count(x => x.Status == "下载中"); } }
+        internal int PendingDownloadCount { get { return queueItems.Count(x => x.Status == "等待中"); } }
+
+        // The native host's inbox is drained on the WinForms UI thread, even if
+        // the main window is currently hidden in the notification area.
+        internal void EnqueueBrowserUrl(string url, string jobPath)
+        {
+            if (IsDisposed || String.IsNullOrWhiteSpace(url)) return;
+            if (queueItems.Any(x => x.BrowserSilent &&
+                String.Equals(x.Url, url, StringComparison.OrdinalIgnoreCase)))
+            {
+                SilentDownloadBridge.CompleteJob(jobPath);
+                return;
+            }
+
+            AddQueueItem(new DownloadQueueItem
+            {
+                Title = url, Url = url, BrowserSilent = true,
+                BrowserJobPath = jobPath,
+                OutputFolder = SilentDownloadBridge.SilentFolder,
+                Status = "等待中",
+                ProgressWeight = 1
+            });
+            SetState("浏览器已加入队列 · " + url);
+            if (downloadRunning) browserAutoRunRequested = true;
+            else { var run = DownloadQueue(); }
+        }
+
+        internal async Task CancelQueueForExitAsync()
+        {
+            if (!downloadRunning) return;
+            StopQueue();
+            // Cancellation terminates the child yt-dlp process through the
+            // existing process-tree cancellation handler.
+            for (int attempt = 0; attempt < 100 && downloadRunning; attempt++)
+                await Task.Delay(100);
+        }
 
         public MainForm()
         {
@@ -57,6 +115,8 @@ namespace dotSharK
             ffmpegPath = ExistingOrDefault(ffmpegPath, "ffmpeg.exe");
             ffprobePath = ExistingOrDefault(ffprobePath, "ffprobe.exe");
             denoPath = ExistingOrDefault(denoPath, "deno.exe");
+            aria2cPath = ExistingOrDefault(aria2cPath, "aria2c.exe");
+            ytdlpOptions.Aria2cPath = aria2cPath;
             RefreshClient();
             SetState(client == null ? "请先在“配置…”中指定 yt-dlp.exe。" : "就绪 · " + Path.GetFileName(client.ExecutablePath));
             clipboardWatchTimer.Tick += (s, e) => UpdateClipboardAttention();
@@ -113,23 +173,31 @@ namespace dotSharK
             queueGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "status", HeaderText = "状态", FillWeight = 9 });
             queueGrid.SelectionChanged += (s, e) => UpdateQueueControls();
             var queueMenu = new ContextMenuStrip { BackColor = DarkPalette.Surface, ForeColor = fg, ShowImageMargin = false, Renderer = new DarkContextMenuRenderer() };
-            var retryOneMenuItem = new ToolStripMenuItem("重试此项");
+            var pauseOneMenuItem = new ToolStripMenuItem("暂停此项");
+            var retryOneMenuItem = new ToolStripMenuItem("继续/重试此项");
+            queueMenu.Items.Add(pauseOneMenuItem);
             queueMenu.Items.Add(retryOneMenuItem);
             DownloadQueueItem contextItem = null;
             queueGrid.CellMouseDown += (s, e) =>
             {
-                if (e.Button == MouseButtons.Right)
+                if (e.Button != MouseButtons.Right) return;
+                contextItem = null;
+                if (e.RowIndex >= 0)
                 {
-                    contextItem = null;
-                    if (e.RowIndex >= 0)
-                    {
-                        queueGrid.ClearSelection(); queueGrid.Rows[e.RowIndex].Selected = true;
-                        contextItem = queueGrid.Rows[e.RowIndex].Tag as DownloadQueueItem;
-                    }
-                    retryOneMenuItem.Enabled = !downloadRunning && contextItem != null && contextItem.Status == "失败";
+                    queueGrid.ClearSelection(); queueGrid.Rows[e.RowIndex].Selected = true;
+                    contextItem = queueGrid.Rows[e.RowIndex].Tag as DownloadQueueItem;
                 }
+                UpdateItemContextActions(contextItem, pauseOneMenuItem, retryOneMenuItem);
             };
-            retryOneMenuItem.Click += async (s, e) => { if (contextItem != null && contextItem.Status == "失败" && ValidProxy()) { contextItem.Status = "等待中"; UpdateQueueRow(contextItem); UpdateQueueControls(); await DownloadQueue(); } };
+            queueMenu.Opening += (s, e) =>
+            {
+                if (contextItem == null || !queueItems.Contains(contextItem))
+                    contextItem = queueGrid.SelectedRows.Count > 0
+                        ? queueGrid.SelectedRows[0].Tag as DownloadQueueItem : null;
+                UpdateItemContextActions(contextItem, pauseOneMenuItem, retryOneMenuItem);
+            };
+            pauseOneMenuItem.Click += (s, e) => PauseQueueItem(contextItem);
+            retryOneMenuItem.Click += (s, e) => ResumeQueueItem(contextItem);
             queueGrid.ContextMenuStrip = queueMenu;
             queueArea.Controls.Add(queueGrid, 0, 1); root.Controls.Add(queueArea, 0, 2);
             NativeDarkTheme.ApplyOnHandleCreated(queueGrid, "DarkMode_Explorer"); NativeDarkTheme.ApplyScrollBarsOnHandleCreated(queueGrid, "DarkMode_Explorer");
@@ -280,6 +348,7 @@ namespace dotSharK
                     Title = media.Title, Url = String.IsNullOrWhiteSpace(media.WebpageUrl) ? url : media.WebpageUrl,
                     Media = media, Video = dialog.Video, Audio = dialog.Audio, Subtitle = dialog.Subtitle,
                     AudioOnly = dialog.AudioOnly, Container = dialog.OutputContainer, OutputFolder = GetOutputFolder(),
+                    OriginPageUrl = urlBox.Text.Trim(),
                     ProgressWeight = media.Duration > 0 ? media.Duration : 1, Status = "等待中"
                 });
             }
@@ -308,7 +377,11 @@ namespace dotSharK
                     SaveSettings();
                 };
                 if (dialog.ShowDialog(this) != DialogResult.OK) { SetState("已取消选择播放列表。"); return; }
-                foreach (var item in dialog.QueueItems) AddQueueItem(item);
+                foreach (var item in dialog.QueueItems)
+                {
+                    item.OriginPageUrl = urlBox.Text.Trim();
+                    AddQueueItem(item);
+                }
                 SetState(String.Format("已加入队列 · {0} 个视频", dialog.QueueItems.Count));
             }
         }
@@ -316,13 +389,18 @@ namespace dotSharK
         private async Task DownloadQueue()
         {
             if (downloadRunning || !queueItems.Any(x => x.Status == "等待中" || x.Status == "已取消") || !ValidProxy()) return;
-            foreach (var item in queueItems.Where(x => x.Status == "已取消")) { item.Status = "等待中"; UpdateQueueRow(item); }
+            foreach (var item in queueItems.Where(x => x.Status == "已取消"))
+            {
+                item.Status = "等待中"; item.PauseRequested = false; UpdateQueueRow(item);
+            }
             downloadRunning = true; queueStopRequested = false; queueCancellation = new CancellationTokenSource();
             CancellationToken cancellationToken = queueCancellation.Token;
             analyzeButton.Enabled = false; progress.SetProgress(0); progress.SetIndeterminate(false); progress.Visible = true; logBox.Clear();
             UpdateQueueControls();
             AppendLog(String.Format("[设置] 忽略 yt-dlp.conf；主代理 {0}；地域验证代理 {1}；分片并发 {2}；同时下载 {3}",
-                ProxySummary(ytdlpOptions.Proxy), ProxySummary(ytdlpOptions.GeoVerificationProxy), ytdlpOptions.ConcurrentFragments, Math.Max(1, Math.Min(6, ytdlpOptions.ConcurrentDownloads))));
+                ProxySummary(ytdlpOptions.ProxyEnabled ? ytdlpOptions.Proxy : ""),
+                ProxySummary(ytdlpOptions.GeoProxyEnabled ? ytdlpOptions.GeoVerificationProxy : ""),
+                ytdlpOptions.ConcurrentFragments, Math.Max(1, Math.Min(6, ytdlpOptions.ConcurrentDownloads))));
             try
             {
                 var pending = queueItems.Where(x => x.Status == "等待中").ToList();
@@ -340,29 +418,47 @@ namespace dotSharK
                             await slots.WaitAsync(cancellationToken);
                             acquired = true;
                             cancellationToken.ThrowIfCancellationRequested();
+                            if (item.PauseRequested || item.Status == "已暂停") return;
                             item.Status = "下载中"; UpdateQueueRow(item); SetState(String.Format("正在下载 · {0}", item.Title));
                             AppendLog("[队列] " + item.Title);
                             try
                             {
                                 Directory.CreateDirectory(item.OutputFolder);
-                                var itemProgress = new ItemDownloadProgress();
+                                using (var linkedToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+                                {
+                                itemCancellation[item] = linkedToken;
+                                var itemProgress = new ItemDownloadProgress
+                                {
+                                    StageCount = ExpectedTransferStages(item)
+                                };
                                 Action<string> output = lineText =>
                                 {
                                     AppendLog("[" + item.Title + "] " + lineText);
                                     ReportDownloadLine(item, itemProgress, lineText);
                                 };
-                                if (item.PlaylistItem) await client.DownloadPlaylistItemAsync(item, ytdlpOptions, output, cancellationToken);
-                                else await client.DownloadAsync(item.Media, item.Video, item.Audio, item.AudioOnly, item.Container, item.OutputFolder, item.Subtitle, ytdlpOptions, output, cancellationToken);
+                                if (item.BrowserSilent)
+                                    await client.DownloadSilentAsync(item.Url, item.OutputFolder,
+                                        SilentDownloadBridge.ArchivePath, ytdlpOptions, output, linkedToken.Token);
+                                else if (item.PlaylistItem)
+                                    await client.DownloadPlaylistItemAsync(item, ytdlpOptions, output, linkedToken.Token);
+                                else
+                                    await client.DownloadAsync(item.Media, item.Video, item.Audio, item.AudioOnly,
+                                        item.Container, item.OutputFolder, item.Subtitle, ytdlpOptions, output,
+                                        linkedToken.Token, item.OriginPageUrl);
                                 item.Status = "已完成";
+                                }
                                 SetItemProgress(item, 1, 100);
                             }
-                            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                            catch (OperationCanceledException)
                             {
-                                item.Status = "已取消";
-                                AppendLog("[已停止] " + item.Title + " · 可继续下载");
+                                item.Status = item.PauseRequested ? "已暂停" : "已取消";
+                                AppendLog("[中断] " + item.Title + " · " + (item.PauseRequested ? "已暂停，可单项继续" : "已停止，可续传"));
                             }
                             catch (Exception ex) { item.Status = "失败"; AppendLog("[失败] " + item.Title + " · " + ex.Message); }
+                            finally { itemCancellation.Remove(item); }
                             UpdateQueueRow(item);
+                            if (item.BrowserSilent && (item.Status == "已完成" || item.Status == "失败"))
+                                SilentDownloadBridge.CompleteJob(item.BrowserJobPath);
                         }
                         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                         {
@@ -381,9 +477,13 @@ namespace dotSharK
             }
             finally
             {
+                bool continueNewBrowserJobs = browserAutoRunRequested && !queueStopRequested;
+                browserAutoRunRequested = false;
                 downloadRunning = false; queueStopRequested = false; progress.Visible = false; currentRunItems.Clear(); currentRunProgress.Clear(); analyzeButton.Enabled = true;
                 if (queueCancellation != null) { queueCancellation.Dispose(); queueCancellation = null; }
                 UpdateQueueControls();
+                if (continueNewBrowserJobs && queueItems.Any(x => x.Status == "等待中"))
+                    BeginInvoke((Action)(async () => await DownloadQueue()));
             }
         }
 
@@ -395,6 +495,51 @@ namespace dotSharK
             AppendLog("[队列] 收到停止请求，正在终止当前 yt-dlp 任务。");
             UpdateQueueControls();
             if (queueCancellation != null) queueCancellation.Cancel();
+        }
+
+        private void UpdateItemContextActions(DownloadQueueItem item, ToolStripMenuItem pause, ToolStripMenuItem resume)
+        {
+            pause.Enabled = item != null && (item.Status == "等待中" || item.Status == "下载中");
+            resume.Enabled = item != null && (item.Status == "失败" || item.Status == "已暂停" ||
+                item.Status == "已取消");
+            resume.Text = item != null && (item.Status == "已暂停" || item.Status == "已取消")
+                ? "继续此项" : "重试此项";
+        }
+
+        private void PauseQueueItem(DownloadQueueItem item)
+        {
+            if (item == null || !(item.Status == "等待中" || item.Status == "下载中")) return;
+            item.PauseRequested = true;
+            CancellationTokenSource source;
+            if (itemCancellation.TryGetValue(item, out source))
+            {
+                item.Status = "暂停中";
+                source.Cancel();
+            }
+            else item.Status = "已暂停";
+            UpdateQueueRow(item);
+            UpdateQueueControls();
+            AppendLog("[单项暂停] " + item.Title);
+        }
+
+        private void ResumeQueueItem(DownloadQueueItem item)
+        {
+            if (item == null || !(item.Status == "失败" || item.Status == "已暂停" || item.Status == "已取消"))
+                return;
+            if (!ValidProxy()) return;
+            item.PauseRequested = false;
+            item.ProgressPercent = 0;
+            item.Status = "等待中";
+            UpdateQueueRow(item);
+            UpdateQueueControls();
+            AppendLog("[继续/重试] " + item.Title);
+            if (downloadRunning)
+            {
+                // The running batch has an immutable snapshot. Run newly resumed
+                // jobs in the next batch without restarting the active transfers.
+                browserAutoRunRequested = true;
+            }
+            else { var run = DownloadQueue(); }
         }
 
         private async Task RetryAllFailed()
@@ -418,27 +563,116 @@ namespace dotSharK
 
         private sealed class ItemDownloadProgress
         {
+            internal readonly object Sync = new object();
             internal int StageCount = 1;
             internal int StageIndex;
             internal double LastPercent;
             internal bool HasPercent;
+            internal string AriaGid;
+        }
+
+        // The item owns this parser, not the global queue: yt-dlp and aria2c
+        // may run concurrently, and even one item can report both formats.
+        internal static int ExpectedTransferStages(DownloadQueueItem item)
+        {
+            if (item == null || item.AudioOnly) return 1;
+            if (item.BrowserSilent || item.PlaylistItem) return 2;
+            return item.Video != null && !item.Video.HasAudio ? 2 : 1;
+        }
+
+        internal static bool TryParseTransferProgress(string line, out double percent, out string ariaGid)
+        {
+            percent = 0;
+            ariaGid = null;
+            if (String.IsNullOrWhiteSpace(line)) return false;
+            // Prefer yt-dlp's completed stream on a combined line such as:
+            // [#fdb514 23MiB/31MiB(74%) ...][download] 100% of 31.88MiB ...
+            var native = Regex.Match(line, @"\[download\]\s*(?<value>\d+(?:[.,]\d+)?)%\s+of\b",
+                RegexOptions.IgnoreCase);
+            // aria2c can report GID, transfer bytes, and progress on every CR.
+            var aria = Regex.Match(line,
+                @"\[#(?<gid>[0-9a-fA-F]{6,})\s+[^\]\r\n]*?\((?<value>\d+(?:[.,]\d+)?)%\)",
+                RegexOptions.IgnoreCase);
+            if (aria.Success) ariaGid = aria.Groups["gid"].Value;
+            var selected = native.Success ? native : aria;
+            if (!selected.Success) return false;
+            return Double.TryParse(selected.Groups["value"].Value.Replace(',', '.'),
+                NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out percent)
+                && percent >= 0 && percent <= 100;
         }
 
         private void ReportDownloadLine(DownloadQueueItem item, ItemDownloadProgress state, string lineText)
         {
             if (item == null || state == null || String.IsNullOrEmpty(lineText)) return;
-            var formatMatch = Regex.Match(lineText, @"Downloading\s+\d+\s+format\(s\):\s*(.+)$", RegexOptions.IgnoreCase);
-            if (formatMatch.Success) state.StageCount = Math.Max(1, formatMatch.Groups[1].Value.Count(c => c == '+') + 1);
-            var match = Regex.Match(lineText, @"(?:^|\s)(\d+(?:[.,]\d+)?)%\s+of\b", RegexOptions.IgnoreCase);
-            if (!match.Success) return;
+            if (item.BrowserSilent && lineText.StartsWith("dotSharKTitle=", StringComparison.Ordinal))
+            {
+                string title = lineText.Substring("dotSharKTitle=".Length).Trim();
+                if (title.Length > 0 && IsHandleCreated && !IsDisposed)
+                {
+                    try
+                    {
+                        BeginInvoke((Action)(() =>
+                        {
+                            if (IsDisposed || !queueItems.Contains(item)) return;
+                            item.Title = title;
+                            UpdateQueueRow(item);
+                        }));
+                    }
+                    catch (InvalidOperationException) { }
+                }
+                return;
+            }
+
             double percent;
-            if (!Double.TryParse(match.Groups[1].Value.Replace(',', '.'), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out percent)) return;
-            if (state.HasPercent && percent + 5 < state.LastPercent && state.LastPercent >= 70 && state.StageIndex < state.StageCount - 1)
-                state.StageIndex++;
-            state.LastPercent = percent;
-            state.HasPercent = true;
-            double itemFraction = Math.Min(0.995, (state.StageIndex + Math.Max(0, Math.Min(100, percent)) / 100.0) / Math.Max(1, state.StageCount));
-            SetItemProgress(item, itemFraction, itemFraction * 100);
+            string ariaGid;
+            if (!TryParseTransferProgress(lineText, out percent, out ariaGid))
+            {
+                var count = Regex.Match(lineText,
+                    @"Downloading\s+(\d+)\s+format\(s\):",
+                    RegexOptions.IgnoreCase);
+                if (count.Success)
+                {
+                    int stages;
+                    if (Int32.TryParse(count.Groups[1].Value, out stages))
+                        lock (state.Sync) state.StageCount = Math.Max(1, Math.Min(32, stages));
+                }
+                return;
+            }
+
+            double fraction;
+            lock (state.Sync)
+            {
+                if (!String.IsNullOrWhiteSpace(ariaGid))
+                {
+                    if (!String.IsNullOrWhiteSpace(state.AriaGid) &&
+                        !String.Equals(ariaGid, state.AriaGid, StringComparison.OrdinalIgnoreCase) &&
+                        state.StageIndex < state.StageCount - 1)
+                    {
+                        // New aria2c GID means yt-dlp started the next format
+                        // (typically video, then audio), even if its preceding
+                        // "Downloading 2 formats" message was suppressed.
+                        state.StageIndex++;
+                        state.HasPercent = false;
+                    }
+                    state.AriaGid = ariaGid;
+                }
+                else if (state.HasPercent && percent + 5 < state.LastPercent &&
+                         state.LastPercent >= 70 && state.StageIndex < state.StageCount - 1)
+                {
+                    // yt-dlp's native downloader uses the same format progress
+                    // syntax for consecutive video and audio, but no aria2c GID.
+                    state.StageIndex++;
+                    state.HasPercent = false;
+                }
+
+                state.LastPercent = percent;
+                state.HasPercent = true;
+                // Never report 100% before yt-dlp exits successfully, because
+                // postprocessing and muxing may still be running.
+                fraction = Math.Min(0.995,
+                    (state.StageIndex + percent / 100.0) / Math.Max(1, state.StageCount));
+            }
+            SetItemProgress(item, fraction, fraction * 100);
         }
 
         private void SetItemProgress(DownloadQueueItem item, double fraction, double itemPercent)
@@ -449,8 +683,11 @@ namespace dotSharK
                 BeginInvoke((Action)(() =>
                 {
                     if (IsDisposed || !currentRunProgress.ContainsKey(item)) return;
-                    currentRunProgress[item] = Math.Max(currentRunProgress[item], Math.Max(0, Math.Min(1, fraction)));
-                    UpdateQueueProgressDisplay(item, itemPercent);
+                    double highWater = Math.Max(currentRunProgress[item], Math.Max(0, Math.Min(1, fraction)));
+                    currentRunProgress[item] = highWater;
+                    item.ProgressPercent = highWater * 100;
+                    UpdateQueueRow(item);
+                    UpdateQueueProgressDisplay(item, item.ProgressPercent);
                 }));
             }
             catch (InvalidOperationException) { }
@@ -496,15 +733,25 @@ namespace dotSharK
         private void AddQueueItem(DownloadQueueItem item)
         {
             queueItems.Add(item);
-            string quality = item.AudioOnly ? "仅音频" : item.PlaylistItem
+            string quality = item.BrowserSilent ? "最高画质 · AV1 优先"
+                : item.AudioOnly ? "仅音频" : item.PlaylistItem
                 ? (item.TargetHeight > 0 ? item.TargetHeight + "p " + item.TargetCodec : "最高可用")
                 : (item.Video == null ? "自动" : item.Video.Label);
-            int row = queueGrid.Rows.Add(item.Title, item.PlaylistItem ? "播放列表" : "单视频", quality, item.Status);
+            string source = item.BrowserSilent ? "浏览器" : item.PlaylistItem ? "播放列表" : "单视频";
+            int row = queueGrid.Rows.Add(item.Title, source, quality, item.Status);
             queueGrid.Rows[row].Tag = item; queueCountLabel.Text = "下载队列（" + queueItems.Count + "）"; UpdateQueueControls();
         }
         private void UpdateQueueRow(DownloadQueueItem item)
         {
-            foreach (DataGridViewRow row in queueGrid.Rows) if (ReferenceEquals(row.Tag, item)) { row.Cells[3].Value = item.Status; break; }
+            foreach (DataGridViewRow row in queueGrid.Rows)
+                if (ReferenceEquals(row.Tag, item))
+                {
+                    row.Cells[0].Value = item.Title;
+                    row.Cells[3].Value = item.Status == "下载中" && item.ProgressPercent > 0
+                        ? "下载中 " + item.ProgressPercent.ToString("0.#", CultureInfo.InvariantCulture) + "%"
+                        : item.Status;
+                    break;
+                }
         }
         private void UpdateQueueControls()
         {
@@ -522,7 +769,12 @@ namespace dotSharK
         {
             foreach (DataGridViewRow row in queueGrid.SelectedRows.Cast<DataGridViewRow>().ToList())
             {
-                var item = row.Tag as DownloadQueueItem; if (item != null && item.Status != "下载中") queueItems.Remove(item);
+                var item = row.Tag as DownloadQueueItem;
+                if (item != null && item.Status != "下载中")
+                {
+                    queueItems.Remove(item);
+                    if (item.BrowserSilent) SilentDownloadBridge.CompleteJob(item.BrowserJobPath);
+                }
                 if (!row.IsNewRow) queueGrid.Rows.Remove(row);
             }
             UpdateQueueControls();
@@ -532,7 +784,12 @@ namespace dotSharK
             foreach (DataGridViewRow row in queueGrid.Rows.Cast<DataGridViewRow>().ToList())
             {
                 var item = row.Tag as DownloadQueueItem;
-                if (item != null && (item.Status == "已完成" || item.Status == "失败")) { queueItems.Remove(item); queueGrid.Rows.Remove(row); }
+                if (item != null && (item.Status == "已完成" || item.Status == "失败"))
+                {
+                    queueItems.Remove(item);
+                    if (item.BrowserSilent) SilentDownloadBridge.CompleteJob(item.BrowserJobPath);
+                    queueGrid.Rows.Remove(row);
+                }
             }
             UpdateQueueControls();
         }
@@ -545,9 +802,9 @@ namespace dotSharK
 
         private bool ValidProxy()
         {
-            if (!ValidProxyUrl(ytdlpOptions.Proxy))
+            if (ytdlpOptions.ProxyEnabled && !ValidProxyUrl(ytdlpOptions.Proxy))
             { SetState("主代理格式不正确。请在“配置 → YT-DLP”中检查代理地址。"); return false; }
-            if (!ValidProxyUrl(ytdlpOptions.GeoVerificationProxy))
+            if (ytdlpOptions.GeoProxyEnabled && !ValidProxyUrl(ytdlpOptions.GeoVerificationProxy))
             { SetState("地域验证代理格式不正确。请在“配置 → YT-DLP”中检查代理地址。"); return false; }
             return true;
         }
@@ -590,14 +847,16 @@ namespace dotSharK
         }
         private void OpenConfiguration(object sender, EventArgs e)
         {
-            using (var d = new ConfigurationDialog(ytDlpPath, ffmpegPath, ffprobePath, denoPath, ytdlpOptions))
+            using (var d = new ConfigurationDialog(ytDlpPath, ffmpegPath, ffprobePath, denoPath, aria2cPath, ytdlpOptions))
                 if (d.ShowDialog(this) == DialogResult.OK)
                 {
                     ytDlpPath = ExistingOrDefault(d.YtDlpPath, "yt-dlp.exe");
                     ffmpegPath = ExistingOrDefault(d.FfmpegPath, "ffmpeg.exe");
                     ffprobePath = ExistingOrDefault(d.FfprobePath, "ffprobe.exe");
                     denoPath = ExistingOrDefault(d.DenoPath, "deno.exe");
+                    aria2cPath = ExistingOrDefault(d.Aria2cPath, "aria2c.exe");
                     ytdlpOptions = d.Options;
+                    ytdlpOptions.Aria2cPath = aria2cPath;
                     RefreshClient(); SaveSettings();
                     SetState(client == null ? "尚未指定 yt-dlp.exe。" : "配置已保存 · " + Path.GetFileName(ytDlpPath));
                 }
@@ -610,7 +869,7 @@ namespace dotSharK
             local = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, fileName);
             return File.Exists(local) ? local : "";
         }
-        private void RefreshClient() { client = String.IsNullOrWhiteSpace(ytDlpPath) ? null : new YtDlpClient(ytDlpPath, ffmpegPath, ffprobePath, denoPath); }
+        private void RefreshClient() { client = String.IsNullOrWhiteSpace(ytDlpPath) ? null : new YtDlpClient(ytDlpPath, ffmpegPath, ffprobePath, denoPath, aria2cPath); }
         private void LoadSettings()
         {
             loadingSettings = true;
@@ -636,9 +895,16 @@ namespace dotSharK
                         else if (key == "ffmpeg") ffmpegPath = value;
                         else if (key == "ffprobe") ffprobePath = value;
                         else if (key == "deno") denoPath = value;
+                        else if (key == "aria2c") aria2cPath = value;
+                        else if (key == "aria2c-sites") ytdlpOptions.Aria2cSites = value;
+                        else if (key == "no-proxy-sites") ytdlpOptions.NoProxySites = value;
+                        else if (key == "custom-args") ytdlpOptions.CustomArguments = value;
+                        else if (key == "proxy-enabled") ytdlpOptions.ProxyEnabled = value != "0";
+                        else if (key == "geo-proxy-enabled") ytdlpOptions.GeoProxyEnabled = value != "0";
                         else if (key == "fragments") { int n; if (Int32.TryParse(value, out n)) ytdlpOptions.ConcurrentFragments = Math.Max(1, Math.Min(32, n)); }
                         else if (key == "downloads") { int n; if (Int32.TryParse(value, out n)) ytdlpOptions.ConcurrentDownloads = Math.Max(1, Math.Min(6, n)); }
                         else if (key == "video-quality-limit") { int n; if (Int32.TryParse(value, out n)) ytdlpOptions.VideoQualityLimit = Math.Max(0, Math.Min(9999, n)); }
+                        else if (key == "silent-folder" && !String.IsNullOrWhiteSpace(value)) ytdlpOptions.SilentDownloadFolder = value;
                         else if (key == "main-window") savedMainWindow = WindowPlacement.Parse(value);
                         else if (key == "playlist-window") savedPlaylistWindow = WindowPlacement.Parse(value);
                         else if (key == "cookie-mode") ytdlpOptions.CookieMode = value == "file" ? "file" : "browser";
@@ -662,11 +928,18 @@ namespace dotSharK
                 savedMainWindow = WindowPlacement.Capture(this, lastMainMaximized);
                 File.WriteAllLines(settingsPath, new[] { "proxy=" + protectedProxy,
                     "geo-proxy=" + protectedGeoProxy,
+                    "proxy-enabled=" + (ytdlpOptions.ProxyEnabled ? "1" : "0"),
+                    "geo-proxy-enabled=" + (ytdlpOptions.GeoProxyEnabled ? "1" : "0"),
                     "folder=" + Uri.EscapeDataString(folderBox == null ? "" : folderBox.Text),
                     "yt-dlp=" + Uri.EscapeDataString(ytDlpPath), "ffmpeg=" + Uri.EscapeDataString(ffmpegPath),
                     "ffprobe=" + Uri.EscapeDataString(ffprobePath), "deno=" + Uri.EscapeDataString(denoPath),
+                    "aria2c=" + Uri.EscapeDataString(aria2cPath),
+                    "aria2c-sites=" + Uri.EscapeDataString(ytdlpOptions.Aria2cSites ?? ""),
+                    "no-proxy-sites=" + Uri.EscapeDataString(ytdlpOptions.NoProxySites ?? ""),
+                    "custom-args=" + Uri.EscapeDataString(ytdlpOptions.CustomArguments ?? ""),
                     "fragments=" + ytdlpOptions.ConcurrentFragments, "downloads=" + Math.Max(1, Math.Min(6, ytdlpOptions.ConcurrentDownloads)),
                     "video-quality-limit=" + ytdlpOptions.VideoQualityLimit,
+                    "silent-folder=" + Uri.EscapeDataString(ytdlpOptions.SilentDownloadFolder ?? ""),
                     "main-window=" + savedMainWindow.Serialize(),
                     "playlist-window=" + (savedPlaylistWindow == null ? "" : savedPlaylistWindow.Serialize()),
                     "cookie-mode=" + ytdlpOptions.CookieMode,

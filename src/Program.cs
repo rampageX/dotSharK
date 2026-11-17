@@ -6,11 +6,18 @@ namespace dotSharK
     internal static class Program
     {
         [STAThread]
-        private static void Main()
+        private static void Main(string[] args)
         {
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new MainForm());
+            // Chromium passes the extension origin as the native host's first argument.
+            // Do not initialize WinForms for either fully silent entry point.
+            if (SilentDownloadBridge.IsNativeHostCall(args))
+            {
+                SilentDownloadBridge.RunNativeHost();
+                return;
+            }
+            bool fromBrowser = args != null && args.Length == 1 && args[0] == "--silent-worker";
+            // Normal launches and browser requests use one resident instance and one queue.
+            SilentDownloadBridge.RunApplication(!fromBrowser);
         }
     }
 }

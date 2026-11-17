@@ -1,0 +1,200 @@
+name: dotSharK UI V2 Stage 6 integration
+on:
+  push:
+    branches:
+      - feature/ui-v2-redesign
+      - main
+  workflow_dispatch:
+
+jobs:
+  windows-integration:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile production application and accepted UI preview
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet build src/dotSharK.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'Integrated production EXE compilation failed' }
+          dotnet build ui-v2/UiV2Stage4Preview.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'Stage 5 preview compilation failed' }
+          if (!(Test-Path src/bin/Release/DotSharK.UiFoundation.dll)) {
+            throw 'UI V2 DLL was not copied with the production executable'
+          }
+      - name: Verify browser link context and Native Host URL routing
+        shell: pwsh
+        run: |
+          node ci-tests/BrowserExtensionAcceptance.js
+          if ($LASTEXITCODE -ne 0) { throw 'Browser extension regression failed' }
+      - name: Package lightweight EXE + UI DLL for existing tool installations
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force package-light | Out-Null
+          Copy-Item src\bin\Release\dotSharK.exe package-light\
+          Copy-Item src\bin\Release\DotSharK.UiFoundation.dll package-light\
+          Copy-Item BrowserExtension package-light\BrowserExtension -Recurse
+          Compress-Archive -Path package-light\* -DestinationPath dotSharK_UIV2_Lightweight_Windows.zip -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dotSharK-ui-v2-lightweight-with-extension
+          path: dotSharK_UIV2_Lightweight_Windows.zip
+          if-no-files-found: error
+      - name: Download official portable CLI tools for real transfer regression and ZIP
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ProgressPreference = 'SilentlyContinue'
+          New-Item -ItemType Directory -Force tools,_deps | Out-Null
+          function Download($url,$file) {
+            for ($attempt=1;$attempt -le 3;$attempt++) {
+              try {
+                Invoke-WebRequest -Uri $url -OutFile $file -MaximumRedirection 8 -TimeoutSec 240
+                if ((Get-Item $file).Length -lt 1000) { throw "Downloaded file too short: $file" }
+                return
+              } catch {
+                if ($attempt -eq 3) { throw }
+                Start-Sleep -Seconds (3 * $attempt)
+              }
+            }
+          }
+          Download 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe' 'tools/yt-dlp.exe'
+          try {
+            Download 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip' '_deps/ffmpeg.zip'
+          } catch {
+            Write-Warning 'Gyan FFmpeg host unavailable; falling back to BtbN static Windows package.'
+            if (Test-Path '_deps/ffmpeg.zip') { Remove-Item '_deps/ffmpeg.zip' -Force }
+            Download 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip' '_deps/ffmpeg.zip'
+          }
+          Expand-Archive '_deps/ffmpeg.zip' '_deps/ffmpeg' -Force
+          foreach ($name in 'ffmpeg.exe','ffprobe.exe') {
+            $candidate = Get-ChildItem '_deps/ffmpeg' -Recurse -Filter $name -File |
+              Where-Object { $_.DirectoryName -match 'bin' } | Select-Object -First 1
+            if (!$candidate) { throw "$name missing from official Gyan package" }
+            Copy-Item $candidate.FullName "tools/$name"
+          }
+          Download 'https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip' '_deps/deno.zip'
+          Expand-Archive '_deps/deno.zip' '_deps/deno' -Force
+          Copy-Item (Get-ChildItem '_deps/deno' -Recurse -Filter 'deno.exe' -File | Select-Object -First 1).FullName 'tools/deno.exe'
+          Download 'https://github.com/aria2/aria2/releases/download/release-1.37.0/aria2-1.37.0-win-64bit-build1.zip' '_deps/aria2.zip'
+          Expand-Archive '_deps/aria2.zip' '_deps/aria2' -Force
+          Copy-Item (Get-ChildItem '_deps/aria2' -Recurse -Filter 'aria2c.exe' -File | Select-Object -First 1).FullName 'tools/aria2c.exe'
+          foreach ($name in 'yt-dlp.exe','ffmpeg.exe','ffprobe.exe','deno.exe','aria2c.exe') {
+            if (!(Test-Path "tools/$name")) { throw "Missing bundled dependency: $name" }
+          }
+          & .\tools\yt-dlp.exe --version
+          & .\tools\ffmpeg.exe -version | Select-Object -First 1
+          & .\tools\deno.exe --version | Select-Object -First 1
+          & .\tools\aria2c.exe --version | Select-Object -First 1
+      - name: Run 48 accepted Stage 5 UI assertions as regression baseline
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe'
+          & $compiler /nologo /codepage:65001 /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Core.dll /r:ui-v2\bin\Release\DotSharK.UiFoundation.dll /out:UiV2Stage5Acceptance.exe ci-tests\UiV2Stage5Acceptance.cs
+          if ($LASTEXITCODE -ne 0) { throw 'Stage 5 harness compilation failed' }
+          Copy-Item ui-v2\bin\Release\DotSharK.UiFoundation.dll .
+          Copy-Item ui-v2\bin\Release\UiV2Stage4Preview.exe .
+          New-Item -ItemType Directory -Force Screenshots-Stage5 | Out-Null
+          & .\UiV2Stage5Acceptance.exe (Resolve-Path Screenshots-Stage5).Path (Resolve-Path .\UiV2Stage4Preview.exe).Path
+          if ($LASTEXITCODE -ne 0) { throw 'Stage 5 regression assertions failed' }
+      - name: Run integrated windows, settings, native host, tray and actual yt-dlp transfer
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe'
+          & $compiler /nologo /codepage:65001 /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Core.dll /r:System.Web.Extensions.dll /r:ui-v2\bin\Release\DotSharK.UiFoundation.dll /out:UiV2Stage6Acceptance.exe ci-tests\UiV2Stage6Acceptance.cs
+          if ($LASTEXITCODE -ne 0) { throw 'Integrated Stage 6 harness compilation failed' }
+          Copy-Item src\bin\Release\dotSharK.exe .
+          Copy-Item src\bin\Release\DotSharK.UiFoundation.dll .
+          & .\tools\ffmpeg.exe -hide_banner -loglevel error -f lavfi -i 'testsrc2=size=160x90:rate=12' -t 1 -an -c:v mpeg4 -q:v 6 -y Sample.mp4
+          if ($LASTEXITCODE -ne 0) { throw 'Could not generate actual MP4 fixture' }
+          New-Item -ItemType Directory -Force Screenshots | Out-Null
+          & .\UiV2Stage6Acceptance.exe (Resolve-Path Screenshots).Path (Resolve-Path .\dotSharK.exe).Path (Resolve-Path Sample.mp4).Path (Resolve-Path .\tools\yt-dlp.exe).Path (Resolve-Path .\tools\ffmpeg.exe).Path
+          if ($LASTEXITCODE -ne 0) { throw 'Stage 6 real application regression failed' }
+      - name: Package complete portable integration test build, dependencies and evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force package\dotSharK\tools,package\Screenshots,package\TestSources | Out-Null
+          Copy-Item src\bin\Release\dotSharK.exe package\dotSharK\
+          Copy-Item src\bin\Release\DotSharK.UiFoundation.dll package\dotSharK\
+          Copy-Item tools\*.exe package\dotSharK\tools\
+          Copy-Item Screenshots\*.png package\Screenshots\
+          Copy-Item ci-tests\UiV2Stage6Acceptance.cs package\TestSources\
+          Copy-Item ci-tests\UiV2Stage5Acceptance.cs package\TestSources\
+          Copy-Item ci-tests\BrowserExtensionAcceptance.js package\TestSources\
+          Copy-Item BrowserExtension package\BrowserExtension -Recurse
+          $sha = (git rev-parse HEAD).Trim()
+          @"
+          dotSharK UI V2 Phase 6 integrated testing build
+          Source commit: $sha
+          Branch: feature/ui-v2-redesign
+          Run: dotSharK/dotSharK.exe (Windows with .NET Framework 4.8)
+          Bundled tools: yt-dlp, ffmpeg, ffprobe, deno, aria2c
+          Screenshots: production integrated windows and real downloaded queue
+          Tests: Stage5 preview UI baseline; Stage6 production UI + settings, cookie/proxy
+          command routing, Native Host validation, tray hide/restore and actual yt-dlp
+          downloads against a local HTTP MP4 server; extension link/page routing tests.
+          This is a development test build, not a formal Release.
+          Not covered automatically: YouTube login/Cookie validity, remote authenticated
+          downloads, browser extension end-to-end, Win11 caption appearance and
+          physical 125%/150% DPI display checks.
+          "@ | Set-Content package\README.txt -Encoding UTF8
+          Compress-Archive -Path package\* -DestinationPath dotSharK_UI_V2_Stage6_Integrated_Windows.zip -Force
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dotSharK-ui-v2-stage6-screenshots
+          path: |
+            Screenshots/*.png
+            Screenshots-Stage5/*.png
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dotSharK-ui-v2-stage6-complete-windows
+          path: dotSharK_UI_V2_Stage6_Integrated_Windows.zip
+          if-no-files-found: error
+
+      - name: Package and verify formal v1.0.5 distribution
+        if: github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force formal | Out-Null
+          Copy-Item src/bin/Release/dotSharK.exe formal/
+          Copy-Item src/bin/Release/DotSharK.UiFoundation.dll formal/
+          Copy-Item BrowserExtension formal/BrowserExtension -Recurse
+          Copy-Item README.md,LICENSE formal/
+          $version = (Get-Item formal/dotSharK.exe).VersionInfo.FileVersion
+          if ($version -ne '1.0.5.0') { throw "Unexpected EXE version: $version" }
+          $expected = @('BrowserExtension/Install-NativeHost.ps1','BrowserExtension/README.md','BrowserExtension/background.js','BrowserExtension/manifest.json','DotSharK.UiFoundation.dll','LICENSE','README.md','dotSharK.exe') | Sort-Object
+          $actual = @(Get-ChildItem formal -Recurse -File | ForEach-Object { [IO.Path]::GetRelativePath((Resolve-Path formal).Path,$_.FullName).Replace('\','/') }) | Sort-Object
+          if (Compare-Object $expected $actual) { throw 'Formal package file list mismatch' }
+          $actual | Set-Content Formal-File-List.txt
+          Compress-Archive -Path formal/* -DestinationPath dotSharK_v1.0.5.zip -Force
+          Expand-Archive dotSharK_v1.0.5.zip verify-formal -Force
+          foreach ($file in $expected) {
+            if ((Get-FileHash "formal/$file").Hash -ne (Get-FileHash "verify-formal/$file").Hash) { throw "ZIP round-trip mismatch: $file" }
+          }
+          $notes = (Get-Content README.md -Raw).Split('## 1.0.5 更新内容')[1].Split('## 1.0.4 更新内容')[0].Trim()
+          $notes += "`n`nWindows 10/11 · .NET Framework 4.8。解压后运行 dotSharK.exe，保持 UI DLL 同目录。外部工具不随包提供。`n`nWindows main 构建与回归：123 项通过。源码提交：$env:GITHUB_SHA"
+          $notes | Set-Content Release-Notes.md -Encoding utf8
+      - name: Publish verified formal release
+        if: github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          gh release view v1.0.5 --repo $env:GITHUB_REPOSITORY 2>$null
+          if ($LASTEXITCODE -eq 0) { throw 'v1.0.5 already exists; refusing to overwrite' }
+          gh release create v1.0.5 dotSharK_v1.0.5.zip --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'dotSharK 1.0.5' --notes-file Release-Notes.md --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Release creation failed' }
+          gh release download v1.0.5 --repo $env:GITHUB_REPOSITORY --pattern dotSharK_v1.0.5.zip --dir verify-download
+          if ($LASTEXITCODE -ne 0) { throw 'Published asset download failed' }
+          if ((Get-FileHash dotSharK_v1.0.5.zip).Hash -ne (Get-FileHash verify-download/dotSharK_v1.0.5.zip).Hash) { throw 'Published asset hash mismatch' }

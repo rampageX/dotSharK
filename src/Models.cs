@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 
 namespace dotSharK
 {
@@ -7,14 +8,23 @@ namespace dotSharK
     {
         public string Proxy = "";
         public string GeoVerificationProxy = "";
+        public bool ProxyEnabled = true;
+        public bool GeoProxyEnabled = true;
+        public string Aria2cPath = "";
+        public string Aria2cSites = "";
+        public string NoProxySites = "";
+        public string CustomArguments = "";
         public int ConcurrentFragments = 8;
         public int ConcurrentDownloads = 3;
         public int VideoQualityLimit = 3; // Distinct resolution tiers; 0 = show all.
+        public string SilentDownloadFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Downloads", "Silent");
         public string CookieMode = "browser";
         public string CookieBrowser = "firefox";
         public string CookieProfileRoot = "";
         public string CookieProfile = "";
         public string CookieFile = "";
+        public bool KeepCompletedTasks;
+        public int SilentMaxHeight; // 0=highest; otherwise 4320/2160/1080/720
     }
 
     internal sealed class BrowserOption
@@ -55,9 +65,14 @@ namespace dotSharK
     internal sealed class DownloadQueueItem
     {
         public string Title, Url, Container, SubtitleLanguage, OutputFolder, Status;
+        public string FilePath, DisplaySource, DisplayQuality;
         public double ProgressWeight = 1;
+        public double ProgressPercent;
         public MediaInfo Media;
-        public bool AudioOnly, AutomaticSubtitle, PlaylistItem;
+        public bool AudioOnly, AutomaticSubtitle, PlaylistItem, BrowserSilent;
+        public string BrowserJobPath;
+        public bool PauseRequested;
+        public string OriginPageUrl;
         public VideoChoice Video;
         public AudioChoice Audio;
         public SubtitleChoice Subtitle;

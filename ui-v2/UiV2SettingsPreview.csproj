@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Release</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{BFFAD6F5-31E7-481D-B9A9-3DA3807A723C}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>dotSharK</RootNamespace>
+    <AssemblyName>UiV2SettingsPreview</AssemblyName>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <LangVersion>7.3</LangVersion>
+    <ApplicationIcon>..\src\Resources\dotShark.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <StartupObject>dotSharK.UiV2.SettingsPreviewLauncher</StartupObject>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <WarningLevel>4</WarningLevel>
+    <DebugType>pdbonly</DebugType>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" /><Reference Include="System.Core" />
+    <Reference Include="System.Drawing" /><Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Web.Extensions" /><Reference Include="System.Security" />
+    <Reference Include="System.IO.Compression" /><Reference Include="System.IO.Compression.FileSystem" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Same original business implementation compiled into a SEPARATE preview EXE.
+         No modification or reference changes to src/dotSharK.csproj. -->
+    <Compile Include="..\src\*.cs" />
+    <Compile Include="ConfigurationDialogV2.cs" />
+    <Compile Include="SettingsPreviewLauncher.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="DotSharK.UiFoundation.csproj">
+      <Project>{F7A8F272-B44A-4736-8E16-F0D5AB3C512D}</Project>
+      <Name>DotSharK.UiFoundation</Name>
+    </ProjectReference>
+    <EmbeddedResource Include="..\src\Resources\dotShark.ico">
+      <LogicalName>dotSharK.Resources.dotShark.ico</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+</Project>
