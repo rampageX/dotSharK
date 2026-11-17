@@ -4,7 +4,9 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
@@ -17,8 +19,12 @@ namespace dotSharK
         public string FfmpegPath { get; private set; }
         public string FfprobePath { get; private set; }
         public string DenoPath { get; private set; }
-        public YtDlpClient(string path, string ffmpeg = "", string ffprobe = "", string deno = "")
-        { ExecutablePath = path; FfmpegPath = ffmpeg ?? ""; FfprobePath = ffprobe ?? ""; DenoPath = deno ?? ""; }
+        public string Aria2cPath { get; private set; }
+        public YtDlpClient(string path, string ffmpeg = "", string ffprobe = "", string deno = "", string aria2c = "")
+        {
+            ExecutablePath = path; FfmpegPath = ffmpeg ?? ""; FfprobePath = ffprobe ?? "";
+            DenoPath = deno ?? ""; Aria2cPath = aria2c ?? "";
+        }
 
         public static string FindExecutable()
         {
@@ -33,6 +39,7 @@ namespace dotSharK
         {
             var args = CommonArguments(options, false);
             args.AddRange(new[] { "--dump-single-json", "--no-warnings", "--no-playlist", "--skip-download", "--no-progress", url });
+            ApplyCustomOverrides(args, options);
             ProcessResult result = await RunCaptureAsync(args);
             if (result.ExitCode != 0 || String.IsNullOrWhiteSpace(result.Stdout))
                 throw new InvalidOperationException(UsefulError(result.Stderr, result.ExitCode));
@@ -43,6 +50,7 @@ namespace dotSharK
         {
             var args = CommonArguments(options, false);
             args.AddRange(new[] { "--dump-single-json", "--flat-playlist", "--no-warnings", "--skip-download", "--no-progress", url });
+            ApplyCustomOverrides(args, options);
             ProcessResult result = await RunCaptureAsync(args);
             if (result.ExitCode != 0 || String.IsNullOrWhiteSpace(result.Stdout))
                 throw new InvalidOperationException(UsefulError(result.Stderr, result.ExitCode));
@@ -130,7 +138,8 @@ namespace dotSharK
         }
 
         public async Task DownloadAsync(MediaInfo info, VideoChoice video, AudioChoice audio, bool audioOnly,
-            string container, string folder, SubtitleChoice subtitle, YtDlpOptions options, Action<string> output, CancellationToken cancellationToken)
+            string container, string folder, SubtitleChoice subtitle, YtDlpOptions options, Action<string> output,
+            CancellationToken cancellationToken, string originPageUrl = null)
         {
             var args = CommonArguments(options, true);
             args.AddRange(new[] { "--no-playlist", "--newline", "--progress", "-P", folder, "-o", "%(title)s.%(ext)s" });
@@ -153,6 +162,7 @@ namespace dotSharK
                 args.Add("--sub-format"); args.Add("srt/best");
             }
             args.Add(info.WebpageUrl);
+            AddAria2cAndOverrides(args, options, originPageUrl ?? info.WebpageUrl);
             var result = await RunStreamingAsync(args, output, cancellationToken);
             if (result.ExitCode != 0) throw new InvalidOperationException(UsefulError(result.Stderr, result.ExitCode));
         }
@@ -177,6 +187,7 @@ namespace dotSharK
                 args.Add(FfmpegPath);
             }
             args.Add(url);
+            AddAria2cAndOverrides(args, options, url);
             var result = await RunStreamingAsync(args, output, cancellationToken);
             if (result.ExitCode != 0)
                 throw new InvalidOperationException(UsefulError(result.Stderr, result.ExitCode));
@@ -197,6 +208,7 @@ namespace dotSharK
                 args.Add("--sub-format"); args.Add("srt/best");
             }
             args.Add(item.Url);
+            AddAria2cAndOverrides(args, options, String.IsNullOrWhiteSpace(item.OriginPageUrl) ? item.Url : item.OriginPageUrl);
             var result = await RunStreamingAsync(args, output, cancellationToken);
             if (result.ExitCode != 0) throw new InvalidOperationException(UsefulError(result.Stderr, result.ExitCode));
         }
@@ -250,8 +262,8 @@ namespace dotSharK
         {
             options = options ?? new YtDlpOptions();
             var args = new List<string> { "--ignore-config" };
-            if (!String.IsNullOrWhiteSpace(options.Proxy)) { args.Add("--proxy"); args.Add(options.Proxy.Trim()); }
-            if (!String.IsNullOrWhiteSpace(options.GeoVerificationProxy)) { args.Add("--geo-verification-proxy"); args.Add(options.GeoVerificationProxy.Trim()); }
+            if (options.ProxyEnabled && !String.IsNullOrWhiteSpace(options.Proxy)) { args.Add("--proxy"); args.Add(options.Proxy.Trim()); }
+            if (options.GeoProxyEnabled && !String.IsNullOrWhiteSpace(options.GeoVerificationProxy)) { args.Add("--geo-verification-proxy"); args.Add(options.GeoVerificationProxy.Trim()); }
             if (options.CookieMode == "file")
             {
                 if (!String.IsNullOrWhiteSpace(options.CookieFile)) { args.Add("--cookies"); args.Add(options.CookieFile.Trim()); }
@@ -273,6 +285,156 @@ namespace dotSharK
         private void AddRuntimeOptions(List<string> args)
         {
             if (!String.IsNullOrWhiteSpace(DenoPath)) { args.Add("--js-runtimes"); args.Add("deno:" + DenoPath); }
+        }
+
+        // Match only the host of the original input page (not yt-dlp's CDN media URL).
+        internal static bool MatchesAriaSite(string pageUrl, string sites)
+        {
+            if (String.IsNullOrWhiteSpace(pageUrl) || String.IsNullOrWhiteSpace(sites)) return false;
+            Uri uri;
+            if (!Uri.TryCreate(pageUrl.Trim(), UriKind.Absolute, out uri) ||
+                (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+                return false;
+            string host = uri.IdnHost.TrimEnd('.').ToLowerInvariant();
+            foreach (string raw in Regex.Split(sites.Trim(), @"\s+"))
+            {
+                string name = raw.Trim().TrimEnd('.').ToLowerInvariant();
+                if (name.StartsWith("*.", StringComparison.Ordinal)) name = name.Substring(2);
+                if (name.Length == 0) continue;
+                if (host == name || host.EndsWith("." + name, StringComparison.Ordinal))
+                    return true;
+            }
+            return false;
+        }
+
+        internal static void ValidateAriaSites(string sites)
+        {
+            if (String.IsNullOrWhiteSpace(sites)) return;
+            foreach (string raw in Regex.Split(sites.Trim(), @"\s+"))
+            {
+                string host = raw.StartsWith("*.", StringComparison.Ordinal) ? raw.Substring(2) : raw;
+                if (host.Length > 253 || !Regex.IsMatch(host,
+                    @"^(?=.{1,253}$)[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+$") ||
+                    host.Split('.').Any(x => x.StartsWith("-", StringComparison.Ordinal) ||
+                                              x.EndsWith("-", StringComparison.Ordinal)))
+                    throw new ArgumentException("aria2c 站点必须填写域名（例如 youtube.com 或 *.youtube.com），不能包含 URL、端口或其它通配符：" + raw);
+            }
+        }
+
+        [DllImport("shell32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        private static extern IntPtr CommandLineToArgvW(string commandLine, out int argumentCount);
+        [DllImport("kernel32.dll")]
+        private static extern IntPtr LocalFree(IntPtr pointer);
+
+        // Native Windows command-line parsing, including quoted values with spaces.
+        // Never invokes cmd.exe, so settings cannot be interpreted as shell commands.
+        internal static List<string> ParseCustomArguments(string text)
+        {
+            var result = new List<string>();
+            if (String.IsNullOrWhiteSpace(text)) return result;
+            int count = 0;
+            IntPtr argv = CommandLineToArgvW("dotSharK.exe " + text.Trim(), out count);
+            if (argv == IntPtr.Zero) throw new ArgumentException("自定义 yt-dlp 参数解析失败。");
+            try
+            {
+                for (int i = 1; i < count; i++)
+                {
+                    string value = Marshal.PtrToStringUni(Marshal.ReadIntPtr(argv, i * IntPtr.Size));
+                    if (value != null) result.Add(value);
+                }
+            }
+            finally { LocalFree(argv); }
+            // Each group must start with an option. Its following non-option token
+            // may be a native yt-dlp value (paths, URLs, codec expressions, etc.).
+            bool hasOption = false;
+            for (int i = 0; i < result.Count; i++)
+            {
+                string value = result[i];
+                if (value == "--" || value.IndexOf('\0') >= 0)
+                    throw new ArgumentException("自定义命令不允许位置参数分隔符 -- 或 NUL 字符。");
+                if (value.StartsWith("-", StringComparison.Ordinal) && value.Length > 1)
+                    hasOption = true;
+                else
+                {
+                    if (!hasOption || i == 0 || !(result[i - 1].StartsWith("-", StringComparison.Ordinal)))
+                        throw new ArgumentException("自定义命令只允许 yt-dlp 选项及其参数值，不能直接附加视频 URL：" + value);
+                    hasOption = false;
+                }
+            }
+            return result;
+        }
+
+        private static string CanonicalSwitch(string arg)
+        {
+            if (String.IsNullOrEmpty(arg) || arg[0] != '-') return "";
+            string flag = arg.StartsWith("--", StringComparison.Ordinal)
+                ? arg.Split('=')[0] : arg.Length >= 2 ? arg.Substring(0, 2) : arg;
+            switch (flag)
+            {
+                case "-f": return "--format";
+                case "-S": return "--format-sort";
+                case "-P": return "--paths";
+                case "-o": return "--output";
+                case "-N": return "--concurrent-fragments";
+                case "-r": return "--limit-rate";
+                case "-R": return "--retries";
+                case "-c": return "--continue";
+                case "--external-downloader": return "--downloader";
+                case "--external-downloader-args": return "--downloader-args";
+                case "--no-continue": return "--continue";
+                case "--no-progress": return "--progress";
+                case "--no-part": return "--part";
+                case "--no-cookies": return "--cookies";
+                case "--cookies-from-browser": return "--cookies";
+                case "--write-auto-subs": return "--write-subs";
+                case "--no-playlist": return "--yes-playlist";
+                default: return flag;
+            }
+        }
+
+        private static bool HasValue(string arg)
+        {
+            string key = CanonicalSwitch(arg);
+            return key == "--format" || key == "--format-sort" || key == "--paths" || key == "--output" ||
+                key == "--proxy" || key == "--geo-verification-proxy" || key == "--cookies" ||
+                key == "--ffmpeg-location" || key == "--sub-langs" || key == "--sub-format" ||
+                key == "--merge-output-format" || key == "--download-archive" ||
+                key == "--playlist-items" || key == "--print" || key == "--downloader" ||
+                key == "--downloader-args" || key == "--concurrent-fragments" ||
+                key == "--js-runtimes" || key == "--retries" || key == "--limit-rate";
+        }
+
+        private void AddAria2cAndOverrides(List<string> args, YtDlpOptions options, string originPageUrl)
+        {
+            if (options != null && MatchesAriaSite(originPageUrl, options.Aria2cSites))
+            {
+                string path = String.IsNullOrWhiteSpace(Aria2cPath) ? options.Aria2cPath : Aria2cPath;
+                if (String.IsNullOrWhiteSpace(path) || !File.Exists(path))
+                    throw new FileNotFoundException("网址命中 aria2c 规则，但 aria2c.exe 路径无效。请到「配置 → 外部工具」检查。", path);
+                args.Insert(args.Count - 1, path);
+                args.Insert(args.Count - 2, "--downloader");
+            }
+            ApplyCustomOverrides(args, options);
+        }
+
+        private static void ApplyCustomOverrides(List<string> args, YtDlpOptions options)
+        {
+            var user = ParseCustomArguments(options == null ? "" : options.CustomArguments);
+            if (user.Count == 0) return;
+            if (args.Count == 0) return;
+            string url = args[args.Count - 1];
+            args.RemoveAt(args.Count - 1);
+            var overrideFlags = new HashSet<string>(user.Select(CanonicalSwitch).Where(x => x.Length > 0),
+                StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < args.Count;)
+            {
+                string key = CanonicalSwitch(args[i]);
+                if (!overrideFlags.Contains(key)) { i += HasValue(args[i]) ? 2 : 1; continue; }
+                int remove = HasValue(args[i]) && i + 1 < args.Count ? 2 : 1;
+                args.RemoveRange(i, remove);
+            }
+            args.AddRange(user);
+            args.Add(url);
         }
 
         private async Task<ProcessResult> RunCaptureAsync(List<string> args)
@@ -332,10 +494,16 @@ namespace dotSharK
         private Process Start(List<string> args)
         {
             if (!File.Exists(ExecutablePath)) throw new FileNotFoundException("找不到 yt-dlp.exe。请将它放入程序目录的 tools 文件夹，或通过“选择程序”指定。", ExecutablePath);
-            var psi = new ProcessStartInfo { FileName = ExecutablePath, Arguments = String.Join(" ", args.Select(Quote)), UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true, StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8, WorkingDirectory = Path.GetDirectoryName(ExecutablePath) };
+            var psi = new ProcessStartInfo { FileName = ExecutablePath, Arguments = String.Join(" ", args.Select(Quote)), UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true, StandardOutputEncoding = new UTF8Encoding(false), StandardErrorEncoding = new UTF8Encoding(false), WorkingDirectory = Path.GetDirectoryName(ExecutablePath) };
+            // yt-dlp embeds Python. Without these, Windows GUI launches may emit
+            // GBK/ACP bytes that become replacement glyphs under our UTF-8 reader.
+            psi.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8:replace";
+            psi.EnvironmentVariables["PYTHONUTF8"] = "1";
             var extraPath = new List<string>();
             if (!String.IsNullOrWhiteSpace(FfmpegPath) && File.Exists(FfmpegPath)) extraPath.Add(Path.GetDirectoryName(FfmpegPath));
             if (!String.IsNullOrWhiteSpace(FfprobePath) && File.Exists(FfprobePath)) extraPath.Add(Path.GetDirectoryName(FfprobePath));
+            if (!String.IsNullOrWhiteSpace(Aria2cPath) && File.Exists(Aria2cPath))
+                extraPath.Add(Path.GetDirectoryName(Aria2cPath));
             if (extraPath.Count > 0) psi.EnvironmentVariables["PATH"] = String.Join(Path.PathSeparator.ToString(), extraPath.Distinct()) + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH");
             var p = new Process { StartInfo = psi, EnableRaisingEvents = true };
             p.Start(); return p;
