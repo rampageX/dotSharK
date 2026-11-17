@@ -160,7 +160,7 @@ namespace dotSharK
         // Headless browser queue: highest resolution and FPS first, then HDR and AV1.
         // No fixed format ID, quality cap or container restriction. Always one page video.
         internal async Task DownloadSilentAsync(string url, string folder, string archivePath,
-            YtDlpOptions options, Action<string> output)
+            YtDlpOptions options, Action<string> output, CancellationToken cancellationToken)
         {
             var args = CommonArguments(options, true);
             args.AddRange(new[] {
@@ -176,7 +176,7 @@ namespace dotSharK
                 args.Add(FfmpegPath);
             }
             args.Add(url);
-            var result = await RunStreamingAsync(args, output, CancellationToken.None);
+            var result = await RunStreamingAsync(args, output, cancellationToken);
             if (result.ExitCode != 0)
                 throw new InvalidOperationException(UsefulError(result.Stderr, result.ExitCode));
         }
