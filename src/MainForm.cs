@@ -14,6 +14,23 @@ namespace dotSharK
 {
     internal sealed class MainForm : Form
     {
+        // Handle the native minimize command before WinForms moves the window
+        // off-screen. The tray owner performs one smooth hide operation.
+        internal event EventHandler TrayMinimizeRequested;
+        protected override void WndProc(ref Message m)
+        {
+            const int WmSysCommand = 0x0112;
+            const long ScMinimize = 0xF020;
+            if (m.Msg == WmSysCommand && (m.WParam.ToInt64() & 0xFFF0L) == ScMinimize &&
+                TrayMinimizeRequested != null && Visible && !IsDisposed)
+            {
+                TrayMinimizeRequested(this, EventArgs.Empty);
+                m.Result = IntPtr.Zero;
+                return;
+            }
+            base.WndProc(ref m);
+        }
+
         private readonly Color bg = Color.FromArgb(34, 34, 34), panel = Color.FromArgb(43, 43, 43), green = DarkPalette.Accent, muted = Color.FromArgb(153, 163, 170), fg = Color.FromArgb(235, 238, 240), line = Color.FromArgb(65, 65, 65);
         private DarkTextBox urlBox, folderBox, logBox;
         private DarkButton analyzeButton;
