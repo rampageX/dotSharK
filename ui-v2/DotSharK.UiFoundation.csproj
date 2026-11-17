@@ -25,6 +25,7 @@
     <Compile Include="Theme.cs" />
     <Compile Include="DarkNative.cs" />
     <Compile Include="DarkForm.cs" />
+    <Compile Include="SettingsScrollHost.cs" />
     <Compile Include="TextButton.cs" />
     <Compile Include="SecondaryButton.cs" />
     <Compile Include="PrimaryButton.cs" />
