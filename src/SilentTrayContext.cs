@@ -36,7 +36,7 @@ namespace dotSharK
         private readonly Icon trayIcon;
         private readonly ContextMenuStrip menu;
         private readonly System.Windows.Forms.Timer refreshTimer;
-        private readonly MainForm mainWindow;
+        private readonly MainFormV2 mainWindow;
         private bool exiting;
         private bool hiding;
         private bool checkRestore;
@@ -49,7 +49,7 @@ namespace dotSharK
         internal SilentTrayContext(bool showMain)
         {
             trayIcon = AppBranding.CreateIcon();
-            mainWindow = new MainForm();
+            mainWindow = new MainFormV2();
             mainRestoreState = mainWindow.WindowState == FormWindowState.Maximized
                 ? FormWindowState.Maximized : FormWindowState.Normal;
 
