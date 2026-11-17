@@ -524,6 +524,7 @@ namespace dotSharK
                         else if (key == "deno") denoPath = value;
                         else if (key == "fragments") { int n; if (Int32.TryParse(value, out n)) ytdlpOptions.ConcurrentFragments = Math.Max(1, Math.Min(32, n)); }
                         else if (key == "downloads") { int n; if (Int32.TryParse(value, out n)) ytdlpOptions.ConcurrentDownloads = Math.Max(1, Math.Min(6, n)); }
+                        else if (key == "video-quality-limit") { int n; if (Int32.TryParse(value, out n)) ytdlpOptions.VideoQualityLimit = Math.Max(0, Math.Min(9999, n)); }
                         else if (key == "cookie-mode") ytdlpOptions.CookieMode = value == "file" ? "file" : "browser";
                         else if (key == "cookie-browser") ytdlpOptions.CookieBrowser = value;
                         else if (key == "cookie-root") ytdlpOptions.CookieProfileRoot = value;
@@ -547,7 +548,8 @@ namespace dotSharK
                     "folder=" + Uri.EscapeDataString(folderBox == null ? "" : folderBox.Text),
                     "yt-dlp=" + Uri.EscapeDataString(ytDlpPath), "ffmpeg=" + Uri.EscapeDataString(ffmpegPath),
                     "ffprobe=" + Uri.EscapeDataString(ffprobePath), "deno=" + Uri.EscapeDataString(denoPath),
-                    "fragments=" + ytdlpOptions.ConcurrentFragments, "downloads=" + Math.Max(1, Math.Min(6, ytdlpOptions.ConcurrentDownloads)), "cookie-mode=" + ytdlpOptions.CookieMode,
+                    "fragments=" + ytdlpOptions.ConcurrentFragments, "downloads=" + Math.Max(1, Math.Min(6, ytdlpOptions.ConcurrentDownloads)),
+                    "video-quality-limit=" + ytdlpOptions.VideoQualityLimit, "cookie-mode=" + ytdlpOptions.CookieMode,
                     "cookie-browser=" + Uri.EscapeDataString(ytdlpOptions.CookieBrowser ?? "firefox"),
                     "cookie-root=" + Uri.EscapeDataString(ytdlpOptions.CookieProfileRoot ?? ""),
                     "cookie-profile=" + Uri.EscapeDataString(ytdlpOptions.CookieProfile ?? ""),
