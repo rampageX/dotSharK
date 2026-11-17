@@ -20,7 +20,7 @@ namespace dotSharK
         private readonly string[] toolNames = { "yt-dlp.exe", "ffmpeg.exe", "ffprobe.exe", "deno.exe", "aria2c.exe" };
         private TextBox proxyBox, geoProxyBox, profileRootBox, cookieFileBox;
         private DarkTextBox silentFolderBox;
-        private DarkTextBox ariaSitesBox, customArgumentsBox;
+        private DarkTextBox ariaSitesBox, noProxySitesBox, customArgumentsBox;
         private CheckBox proxyEnabledBox, geoProxyEnabledBox;
         private DarkNumericUpDown fragmentsBox;
         private DarkNumericUpDown downloadsBox;
@@ -48,6 +48,7 @@ namespace dotSharK
                 SilentDownloadFolder = options.SilentDownloadFolder,
                 ProxyEnabled = options.ProxyEnabled, GeoProxyEnabled = options.GeoProxyEnabled,
                 Aria2cPath = options.Aria2cPath, Aria2cSites = options.Aria2cSites,
+                NoProxySites = options.NoProxySites,
                 CustomArguments = options.CustomArguments };
             Text = "dotSharK 配置"; StartPosition = FormStartPosition.CenterParent; FormBorderStyle = FormBorderStyle.FixedDialog; Icon = AppBranding.CreateIcon();
             MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false; BackColor = bg; ForeColor = fg; Font = new Font("Microsoft YaHei UI", 9F); ClientSize = new Size(790, 540); MinimumSize = new Size(700, 500);
@@ -323,39 +324,67 @@ namespace dotSharK
 
         private void BuildAdvancedPage(Panel page)
         {
-            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5,
+            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 6,
                 BackColor = bg, Padding = new Padding(2) };
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 100));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 170));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 29));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 96));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 53));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 31));
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            layout.Controls.Add(new Label { Text = "使用 aria2c 的站点（按输入网页 URL 匹配）",
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 49));
+
+            layout.Controls.Add(new Label { Text = "使用 aria2c 下载的站点",
                 ForeColor = fg, Font = new Font(Font, FontStyle.Bold),
                 Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
+            layout.Controls.Add(new Label { Text = "以下站点不使用代理",
+                ForeColor = fg, Font = new Font(Font, FontStyle.Bold),
+                Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 1, 0);
             ariaSitesBox = new DarkTextBox { Text = Options.Aria2cSites ?? "", Dock = DockStyle.Fill,
-                Multiline = true, ScrollBars = ScrollBars.Vertical, BackColor = field, ForeColor = fg };
+                Multiline = true, ScrollBars = ScrollBars.Vertical, BackColor = field, ForeColor = fg,
+                Margin = new Padding(0, 0, 7, 0) };
+            noProxySitesBox = new DarkTextBox { Text = Options.NoProxySites ?? "", Dock = DockStyle.Fill,
+                Multiline = true, ScrollBars = ScrollBars.Vertical, BackColor = field, ForeColor = fg,
+                Margin = new Padding(7, 0, 0, 0) };
             layout.Controls.Add(ariaSitesBox, 0, 1);
-            layout.Controls.Add(new Label { Text = "空格、换行分隔域名。youtube.com 自动匹配 *.youtube.com（含 www）；空列表关闭 aria2c。可写 *.example.com。匹配的是原网页域名，不是媒体 CDN。",
-                ForeColor = muted, Dock = DockStyle.Fill, AutoEllipsis = true, Padding = new Padding(0, 5, 0, 0) }, 0, 2);
-            var commandsArea = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2,
-                BackColor = bg, Margin = Padding.Empty };
-            commandsArea.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-            commandsArea.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            commandsArea.Controls.Add(new Label { Text = "自定义 yt-dlp 原生命令行参数（下载与分析均生效）",
-                ForeColor = fg, Font = new Font(Font, FontStyle.Bold),
-                Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
-            customArgumentsBox = new DarkTextBox { Text = Options.CustomArguments ?? "", Dock = DockStyle.Fill,
-                Multiline = true, ScrollBars = ScrollBars.Vertical, BackColor = field, ForeColor = fg };
-            commandsArea.Controls.Add(customArgumentsBox, 0, 1);
-            layout.Controls.Add(commandsArea, 0, 3);
+            layout.Controls.Add(noProxySitesBox, 1, 1);
+
             layout.Controls.Add(new Label
             {
-                Text = "例如 --retries 20 --no-mtime。支持带引号的参数值；自定义参数覆盖 dotSharK 的同名设置。" +
+                Text = "空格/换行分隔域名，如 youtube.com，自动覆盖所有子域名；按输入网页网址匹配，不看视频 CDN。",
+                ForeColor = muted, Dock = DockStyle.Fill, AutoEllipsis = true,
+                Padding = new Padding(0, 5, 9, 0)
+            }, 0, 2);
+            layout.Controls.Add(new Label
+            {
+                Text = "规则相同；命中时主代理和地域验证代理均不使用，已保存的代理地址不受影响。",
+                ForeColor = muted, Dock = DockStyle.Fill, AutoEllipsis = true,
+                Padding = new Padding(7, 5, 0, 0)
+            }, 1, 2);
+            var commandTitle = new Label
+            {
+                Text = "自定义 yt-dlp 原生命令行参数（下载与分析均生效）",
+                ForeColor = fg, Font = new Font(Font, FontStyle.Bold),
+                Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft
+            };
+            layout.Controls.Add(commandTitle, 0, 3);
+            layout.SetColumnSpan(commandTitle, 2);
+            customArgumentsBox = new DarkTextBox { Text = Options.CustomArguments ?? "",
+                Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Vertical,
+                BackColor = field, ForeColor = fg };
+            layout.Controls.Add(customArgumentsBox, 0, 4);
+            layout.SetColumnSpan(customArgumentsBox, 2);
+            var hint = new Label
+            {
+                Text = "例如 --retries 20 --no-mtime；支持带引号的参数值，自定义参数覆盖一般内置设置。" +
                        Environment.NewLine +
-                       "aria2c.exe 在「外部工具」页选择。yt-dlp 原生续传默认启用；是否能恢复取决于网站及下载协议。",
-                ForeColor = muted, Dock = DockStyle.Fill, AutoEllipsis = true, Padding = new Padding(0, 10, 0, 0)
-            }, 0, 4);
+                       "无代理站点规则优先于自定义代理参数。aria2c.exe 在「外部工具」页指定。",
+                ForeColor = muted, Dock = DockStyle.Fill, AutoEllipsis = true,
+                Padding = new Padding(0, 7, 0, 0)
+            };
+            layout.Controls.Add(hint, 0, 5);
+            layout.SetColumnSpan(hint, 2);
             page.Controls.Add(layout);
         }
 
@@ -385,11 +414,13 @@ namespace dotSharK
             Options.ProxyEnabled = proxyEnabledBox.Checked; Options.GeoProxyEnabled = geoProxyEnabledBox.Checked;
             Options.Aria2cPath = Aria2cPath;
             Options.Aria2cSites = ariaSitesBox.Text.Trim();
+            Options.NoProxySites = noProxySitesBox.Text.Trim();
             Options.CustomArguments = customArgumentsBox.Text.Trim();
             try
             {
                 YtDlpClient.ParseCustomArguments(Options.CustomArguments);
                 YtDlpClient.ValidateAriaSites(Options.Aria2cSites);
+                YtDlpClient.ValidateAriaSites(Options.NoProxySites);
             }
             catch (ArgumentException ex)
             {
