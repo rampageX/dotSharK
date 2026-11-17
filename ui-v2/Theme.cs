@@ -82,7 +82,10 @@ namespace dotSharK.UiV2
         public static readonly Font MonoFont = new Font("Consolas", MonoFontPx,
             FontStyle.Regular, GraphicsUnit.Pixel);
 
-        public static readonly Size SettingsClientSize = new Size(792, 572);
+        // Sizable settings window: enough room for the longest (YT-DLP) page
+        // without any page-level scrollbar, and no restrictive maximum size.
+        public static readonly Size SettingsClientSize = new Size(864, 760);
+        public static readonly Size SettingsMinimumSize = new Size(840, 760);
         public static readonly Size MainMinimumSize = new Size(900, 680);
         public static readonly Size PlaylistMinimumSize = new Size(960, 640);
         public static readonly Size QualityMinimumSize = new Size(760, 560);
