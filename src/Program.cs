@@ -15,14 +15,9 @@ namespace dotSharK
                 SilentDownloadBridge.RunNativeHost();
                 return;
             }
-            if (args != null && args.Length == 1 && args[0] == "--silent-worker")
-            {
-                SilentDownloadBridge.RunWorker();
-                return;
-            }
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new MainForm());
+            bool fromBrowser = args != null && args.Length == 1 && args[0] == "--silent-worker";
+            // Normal launches and browser requests use one resident instance and one queue.
+            SilentDownloadBridge.RunApplication(!fromBrowser);
         }
     }
 }
