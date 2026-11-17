@@ -25,7 +25,9 @@ namespace dotSharK
         private readonly List<DownloadQueueItem> queueItems = new List<DownloadQueueItem>();
         private YtDlpClient client;
         private YtDlpOptions ytdlpOptions = new YtDlpOptions();
-        private string ytDlpPath = "", ffmpegPath = "", ffprobePath = "", denoPath = "";
+        private string ytDlpPath = "", ffmpegPath = "", ffprobePath = "", denoPath = "", aria2cPath = "";
+        private readonly Dictionary<DownloadQueueItem, CancellationTokenSource> itemCancellation =
+            new Dictionary<DownloadQueueItem, CancellationTokenSource>();
         private bool loadingSettings;
         private bool downloadRunning;
         private bool queueStopRequested;
@@ -96,6 +98,8 @@ namespace dotSharK
             ffmpegPath = ExistingOrDefault(ffmpegPath, "ffmpeg.exe");
             ffprobePath = ExistingOrDefault(ffprobePath, "ffprobe.exe");
             denoPath = ExistingOrDefault(denoPath, "deno.exe");
+            aria2cPath = ExistingOrDefault(aria2cPath, "aria2c.exe");
+            ytdlpOptions.Aria2cPath = aria2cPath;
             RefreshClient();
             SetState(client == null ? "请先在“配置…”中指定 yt-dlp.exe。" : "就绪 · " + Path.GetFileName(client.ExecutablePath));
             clipboardWatchTimer.Tick += (s, e) => UpdateClipboardAttention();
@@ -319,6 +323,7 @@ namespace dotSharK
                     Title = media.Title, Url = String.IsNullOrWhiteSpace(media.WebpageUrl) ? url : media.WebpageUrl,
                     Media = media, Video = dialog.Video, Audio = dialog.Audio, Subtitle = dialog.Subtitle,
                     AudioOnly = dialog.AudioOnly, Container = dialog.OutputContainer, OutputFolder = GetOutputFolder(),
+                    OriginPageUrl = urlBox.Text.Trim(),
                     ProgressWeight = media.Duration > 0 ? media.Duration : 1, Status = "等待中"
                 });
             }
@@ -347,7 +352,11 @@ namespace dotSharK
                     SaveSettings();
                 };
                 if (dialog.ShowDialog(this) != DialogResult.OK) { SetState("已取消选择播放列表。"); return; }
-                foreach (var item in dialog.QueueItems) AddQueueItem(item);
+                foreach (var item in dialog.QueueItems)
+                {
+                    item.OriginPageUrl = urlBox.Text.Trim();
+                    AddQueueItem(item);
+                }
                 SetState(String.Format("已加入队列 · {0} 个视频", dialog.QueueItems.Count));
             }
         }
@@ -355,13 +364,18 @@ namespace dotSharK
         private async Task DownloadQueue()
         {
             if (downloadRunning || !queueItems.Any(x => x.Status == "等待中" || x.Status == "已取消") || !ValidProxy()) return;
-            foreach (var item in queueItems.Where(x => x.Status == "已取消")) { item.Status = "等待中"; UpdateQueueRow(item); }
+            foreach (var item in queueItems.Where(x => x.Status == "已取消"))
+            {
+                item.Status = "等待中"; item.PauseRequested = false; UpdateQueueRow(item);
+            }
             downloadRunning = true; queueStopRequested = false; queueCancellation = new CancellationTokenSource();
             CancellationToken cancellationToken = queueCancellation.Token;
             analyzeButton.Enabled = false; progress.SetProgress(0); progress.SetIndeterminate(false); progress.Visible = true; logBox.Clear();
             UpdateQueueControls();
             AppendLog(String.Format("[设置] 忽略 yt-dlp.conf；主代理 {0}；地域验证代理 {1}；分片并发 {2}；同时下载 {3}",
-                ProxySummary(ytdlpOptions.Proxy), ProxySummary(ytdlpOptions.GeoVerificationProxy), ytdlpOptions.ConcurrentFragments, Math.Max(1, Math.Min(6, ytdlpOptions.ConcurrentDownloads))));
+                ProxySummary(ytdlpOptions.ProxyEnabled ? ytdlpOptions.Proxy : ""),
+                ProxySummary(ytdlpOptions.GeoProxyEnabled ? ytdlpOptions.GeoVerificationProxy : ""),
+                ytdlpOptions.ConcurrentFragments, Math.Max(1, Math.Min(6, ytdlpOptions.ConcurrentDownloads))));
             try
             {
                 var pending = queueItems.Where(x => x.Status == "等待中").ToList();
@@ -379,11 +393,15 @@ namespace dotSharK
                             await slots.WaitAsync(cancellationToken);
                             acquired = true;
                             cancellationToken.ThrowIfCancellationRequested();
+                            if (item.PauseRequested || item.Status == "已暂停") return;
                             item.Status = "下载中"; UpdateQueueRow(item); SetState(String.Format("正在下载 · {0}", item.Title));
                             AppendLog("[队列] " + item.Title);
                             try
                             {
                                 Directory.CreateDirectory(item.OutputFolder);
+                                using (var linkedToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+                                {
+                                itemCancellation[item] = linkedToken;
                                 var itemProgress = new ItemDownloadProgress();
                                 Action<string> output = lineText =>
                                 {
@@ -392,21 +410,24 @@ namespace dotSharK
                                 };
                                 if (item.BrowserSilent)
                                     await client.DownloadSilentAsync(item.Url, item.OutputFolder,
-                                        SilentDownloadBridge.ArchivePath, ytdlpOptions, output, cancellationToken);
+                                        SilentDownloadBridge.ArchivePath, ytdlpOptions, output, linkedToken.Token);
                                 else if (item.PlaylistItem)
-                                    await client.DownloadPlaylistItemAsync(item, ytdlpOptions, output, cancellationToken);
+                                    await client.DownloadPlaylistItemAsync(item, ytdlpOptions, output, linkedToken.Token);
                                 else
                                     await client.DownloadAsync(item.Media, item.Video, item.Audio, item.AudioOnly,
-                                        item.Container, item.OutputFolder, item.Subtitle, ytdlpOptions, output, cancellationToken);
+                                        item.Container, item.OutputFolder, item.Subtitle, ytdlpOptions, output,
+                                        linkedToken.Token, item.OriginPageUrl);
                                 item.Status = "已完成";
+                                }
                                 SetItemProgress(item, 1, 100);
                             }
-                            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                            catch (OperationCanceledException)
                             {
-                                item.Status = "已取消";
-                                AppendLog("[已停止] " + item.Title + " · 可继续下载");
+                                item.Status = item.PauseRequested ? "已暂停" : "已取消";
+                                AppendLog("[中断] " + item.Title + " · " + (item.PauseRequested ? "已暂停，可单项继续" : "已停止，可续传"));
                             }
                             catch (Exception ex) { item.Status = "失败"; AppendLog("[失败] " + item.Title + " · " + ex.Message); }
+                            finally { itemCancellation.Remove(item); }
                             UpdateQueueRow(item);
                             if (item.BrowserSilent && (item.Status == "已完成" || item.Status == "失败"))
                                 SilentDownloadBridge.CompleteJob(item.BrowserJobPath);
@@ -636,9 +657,9 @@ namespace dotSharK
 
         private bool ValidProxy()
         {
-            if (!ValidProxyUrl(ytdlpOptions.Proxy))
+            if (ytdlpOptions.ProxyEnabled && !ValidProxyUrl(ytdlpOptions.Proxy))
             { SetState("主代理格式不正确。请在“配置 → YT-DLP”中检查代理地址。"); return false; }
-            if (!ValidProxyUrl(ytdlpOptions.GeoVerificationProxy))
+            if (ytdlpOptions.GeoProxyEnabled && !ValidProxyUrl(ytdlpOptions.GeoVerificationProxy))
             { SetState("地域验证代理格式不正确。请在“配置 → YT-DLP”中检查代理地址。"); return false; }
             return true;
         }
@@ -681,14 +702,16 @@ namespace dotSharK
         }
         private void OpenConfiguration(object sender, EventArgs e)
         {
-            using (var d = new ConfigurationDialog(ytDlpPath, ffmpegPath, ffprobePath, denoPath, ytdlpOptions))
+            using (var d = new ConfigurationDialog(ytDlpPath, ffmpegPath, ffprobePath, denoPath, aria2cPath, ytdlpOptions))
                 if (d.ShowDialog(this) == DialogResult.OK)
                 {
                     ytDlpPath = ExistingOrDefault(d.YtDlpPath, "yt-dlp.exe");
                     ffmpegPath = ExistingOrDefault(d.FfmpegPath, "ffmpeg.exe");
                     ffprobePath = ExistingOrDefault(d.FfprobePath, "ffprobe.exe");
                     denoPath = ExistingOrDefault(d.DenoPath, "deno.exe");
+                    aria2cPath = ExistingOrDefault(d.Aria2cPath, "aria2c.exe");
                     ytdlpOptions = d.Options;
+                    ytdlpOptions.Aria2cPath = aria2cPath;
                     RefreshClient(); SaveSettings();
                     SetState(client == null ? "尚未指定 yt-dlp.exe。" : "配置已保存 · " + Path.GetFileName(ytDlpPath));
                 }
@@ -701,7 +724,7 @@ namespace dotSharK
             local = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, fileName);
             return File.Exists(local) ? local : "";
         }
-        private void RefreshClient() { client = String.IsNullOrWhiteSpace(ytDlpPath) ? null : new YtDlpClient(ytDlpPath, ffmpegPath, ffprobePath, denoPath); }
+        private void RefreshClient() { client = String.IsNullOrWhiteSpace(ytDlpPath) ? null : new YtDlpClient(ytDlpPath, ffmpegPath, ffprobePath, denoPath, aria2cPath); }
         private void LoadSettings()
         {
             loadingSettings = true;
@@ -727,6 +750,11 @@ namespace dotSharK
                         else if (key == "ffmpeg") ffmpegPath = value;
                         else if (key == "ffprobe") ffprobePath = value;
                         else if (key == "deno") denoPath = value;
+                        else if (key == "aria2c") aria2cPath = value;
+                        else if (key == "aria2c-sites") ytdlpOptions.Aria2cSites = value;
+                        else if (key == "custom-args") ytdlpOptions.CustomArguments = value;
+                        else if (key == "proxy-enabled") ytdlpOptions.ProxyEnabled = value != "0";
+                        else if (key == "geo-proxy-enabled") ytdlpOptions.GeoProxyEnabled = value != "0";
                         else if (key == "fragments") { int n; if (Int32.TryParse(value, out n)) ytdlpOptions.ConcurrentFragments = Math.Max(1, Math.Min(32, n)); }
                         else if (key == "downloads") { int n; if (Int32.TryParse(value, out n)) ytdlpOptions.ConcurrentDownloads = Math.Max(1, Math.Min(6, n)); }
                         else if (key == "video-quality-limit") { int n; if (Int32.TryParse(value, out n)) ytdlpOptions.VideoQualityLimit = Math.Max(0, Math.Min(9999, n)); }
@@ -754,9 +782,14 @@ namespace dotSharK
                 savedMainWindow = WindowPlacement.Capture(this, lastMainMaximized);
                 File.WriteAllLines(settingsPath, new[] { "proxy=" + protectedProxy,
                     "geo-proxy=" + protectedGeoProxy,
+                    "proxy-enabled=" + (ytdlpOptions.ProxyEnabled ? "1" : "0"),
+                    "geo-proxy-enabled=" + (ytdlpOptions.GeoProxyEnabled ? "1" : "0"),
                     "folder=" + Uri.EscapeDataString(folderBox == null ? "" : folderBox.Text),
                     "yt-dlp=" + Uri.EscapeDataString(ytDlpPath), "ffmpeg=" + Uri.EscapeDataString(ffmpegPath),
                     "ffprobe=" + Uri.EscapeDataString(ffprobePath), "deno=" + Uri.EscapeDataString(denoPath),
+                    "aria2c=" + Uri.EscapeDataString(aria2cPath),
+                    "aria2c-sites=" + Uri.EscapeDataString(ytdlpOptions.Aria2cSites ?? ""),
+                    "custom-args=" + Uri.EscapeDataString(ytdlpOptions.CustomArguments ?? ""),
                     "fragments=" + ytdlpOptions.ConcurrentFragments, "downloads=" + Math.Max(1, Math.Min(6, ytdlpOptions.ConcurrentDownloads)),
                     "video-quality-limit=" + ytdlpOptions.VideoQualityLimit,
                     "silent-folder=" + Uri.EscapeDataString(ytdlpOptions.SilentDownloadFolder ?? ""),
