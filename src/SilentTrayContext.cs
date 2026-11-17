@@ -2,53 +2,62 @@ using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace dotSharK
 {
-    // The browser-launched worker owns the tray icon. It keeps its own queue alive
-    // without displaying a window, and opens the ordinary main form on demand.
+    // One application, one MainForm, one download queue, one tray icon.
+    // The browser merely drops requests into the inbox, which this UI thread drains.
     internal sealed class SilentTrayContext : ApplicationContext
     {
-        private readonly CancellationTokenSource shutdown = new CancellationTokenSource();
         private readonly NotifyIcon notification;
         private readonly Icon trayIcon;
         private readonly ContextMenuStrip menu;
         private readonly System.Windows.Forms.Timer refreshTimer;
-        private readonly Task worker;
-        private MainForm mainWindow;
-        private SilentStatusDialog statusWindow;
+        private readonly MainForm mainWindow;
         private bool exiting;
         private FormWindowState mainRestoreState = FormWindowState.Normal;
 
-        internal SilentTrayContext()
+        internal SilentTrayContext(bool showMain)
         {
             trayIcon = AppBranding.CreateIcon();
+            mainWindow = new MainForm();
+            // Ensure BeginInvoke and progress updates work even before Show().
+            var handle = mainWindow.Handle;
+            mainWindow.FormClosing += OnMainWindowClosing;
+            mainWindow.Resize += (s, e) =>
+            {
+                if (mainWindow.IsDisposed || exiting) return;
+                if (mainWindow.WindowState == FormWindowState.Minimized)
+                {
+                    mainWindow.ShowInTaskbar = false;
+                    mainWindow.Hide();
+                }
+                else mainRestoreState = mainWindow.WindowState;
+            };
+
             menu = new ContextMenuStrip
             {
                 BackColor = DarkPalette.Surface,
                 ForeColor = DarkPalette.Foreground,
                 ShowImageMargin = false
             };
-            var openMain = new ToolStripMenuItem("打开 dotSharK 主界面");
+            var openMain = new ToolStripMenuItem("打开 dotSharK");
             openMain.Click += (s, e) => OpenMainWindow();
-            var openStatus = new ToolStripMenuItem("查看静默下载状态…");
-            openStatus.Click += (s, e) => OpenStatusWindow();
-            var openFolder = new ToolStripMenuItem("打开静默下载目录");
+            var openFolder = new ToolStripMenuItem("打开浏览器下载目录");
             openFolder.Click += (s, e) => OpenDownloadFolder();
-            var exit = new ToolStripMenuItem("退出 dotSharK 后台");
+            var exit = new ToolStripMenuItem("退出 dotSharK");
             exit.Click += async (s, e) => await StopAndExitAsync(exit);
             menu.Items.Add(openMain);
-            menu.Items.Add(openStatus);
             menu.Items.Add(openFolder);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(exit);
+
             notification = new NotifyIcon
             {
                 Icon = trayIcon,
-                Text = "dotSharK · 静默下载队列",
+                Text = "dotSharK · 统一下载队列",
                 ContextMenuStrip = menu,
                 Visible = true
             };
@@ -56,57 +65,52 @@ namespace dotSharK
             {
                 if (e.Button == MouseButtons.Left) OpenMainWindow();
             };
-            refreshTimer = new System.Windows.Forms.Timer { Interval = 1000 };
-            refreshTimer.Tick += (s, e) => RefreshTooltip();
+
+            refreshTimer = new System.Windows.Forms.Timer { Interval = 450 };
+            refreshTimer.Tick += (s, e) =>
+            {
+                if (exiting) return;
+                ProcessIncomingJobs();
+                if (SilentDownloadBridge.ConsumeShowMainRequest()) OpenMainWindow();
+                UpdateTooltip();
+            };
             refreshTimer.Start();
-            worker = Task.Run(() => SilentDownloadBridge.RunWorkerLoop(shutdown.Token));
+            if (showMain) OpenMainWindow();
+        }
+
+        private void ProcessIncomingJobs()
+        {
+            foreach (var request in SilentDownloadBridge.ClaimPendingJobs())
+                mainWindow.EnqueueBrowserUrl(request.Url, request.JobPath);
+        }
+
+        private void OnMainWindowClosing(object sender, FormClosingEventArgs e)
+        {
+            if (exiting || e.CloseReason != CloseReason.UserClosing) return;
+            e.Cancel = true;
+            mainWindow.ShowInTaskbar = false;
+            mainWindow.Hide();
         }
 
         private void OpenMainWindow()
         {
-            if (exiting) return;
-            if (mainWindow == null || mainWindow.IsDisposed)
-            {
-                mainWindow = new MainForm();
-                mainWindow.FormClosed += (s, e) => mainWindow = null;
-                mainWindow.Resize += (s, e) =>
-                {
-                    if (mainWindow == null || mainWindow.IsDisposed) return;
-                    if (mainWindow.WindowState == FormWindowState.Minimized)
-                        mainWindow.Hide(); // Minimize to notification area, not the taskbar.
-                    else mainRestoreState = mainWindow.WindowState;
-                };
-                mainWindow.Show();
-                mainRestoreState = mainWindow.WindowState == FormWindowState.Maximized
-                    ? FormWindowState.Maximized : FormWindowState.Normal;
-            }
-            else
-            {
-                if (mainWindow.WindowState == FormWindowState.Minimized)
-                    mainWindow.WindowState = mainRestoreState;
-                mainWindow.Show();
-                mainWindow.BringToFront();
-                mainWindow.Activate();
-            }
+            if (exiting || mainWindow.IsDisposed) return;
+            mainWindow.ShowInTaskbar = true;
+            if (mainWindow.WindowState == FormWindowState.Minimized)
+                mainWindow.WindowState = mainRestoreState;
+            mainWindow.Show();
+            mainWindow.BringToFront();
+            mainWindow.Activate();
         }
 
-        private void OpenStatusWindow()
+        private void UpdateTooltip()
         {
-            if (exiting) return;
-            if (statusWindow == null || statusWindow.IsDisposed)
-            {
-                statusWindow = new SilentStatusDialog();
-                statusWindow.FormClosed += (s, e) => statusWindow = null;
-                statusWindow.Show();
-            }
-            else
-            {
-                if (statusWindow.WindowState == FormWindowState.Minimized)
-                    statusWindow.WindowState = FormWindowState.Normal;
-                statusWindow.Show();
-                statusWindow.BringToFront();
-                statusWindow.Activate();
-            }
+            int active = mainWindow.ActiveDownloadCount;
+            int pending = mainWindow.PendingDownloadCount + SilentDownloadBridge.PendingFileCount;
+            string caption = "dotSharK · " + (active > 0 ? "下载中 " + active : "就绪");
+            if (pending > 0) caption += " · 等待 " + pending;
+            if (!String.Equals(caption, notification.Text, StringComparison.Ordinal))
+                notification.Text = caption;
         }
 
         private static void OpenDownloadFolder()
@@ -119,19 +123,9 @@ namespace dotSharK
             }
             catch (Exception ex)
             {
-                MessageBox.Show("无法打开静默下载目录：" + ex.Message, "dotSharK",
-                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("无法打开浏览器下载目录：" + ex.Message,
+                    "dotSharK", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
-        }
-
-        private void RefreshTooltip()
-        {
-            if (notification == null || !notification.Visible) return;
-            string info = SilentDownloadBridge.ActiveUrl != null ? "正在下载" : "就绪";
-            int waiting = SilentDownloadBridge.PendingCount;
-            string caption = "dotSharK · " + info + (waiting > 0 ? " · 排队 " + waiting : "");
-            if (!String.Equals(caption, notification.Text, StringComparison.Ordinal))
-                notification.Text = caption;
         }
 
         private async Task StopAndExitAsync(ToolStripMenuItem exitItem)
@@ -139,19 +133,17 @@ namespace dotSharK
             if (exiting) return;
             exiting = true;
             exitItem.Enabled = false;
-            shutdown.Cancel();
-            // Give yt-dlp time to stop and return the current job to the pending queue.
-            await Task.WhenAny(worker, Task.Delay(5000));
+            refreshTimer.Stop();
+            await mainWindow.CancelQueueForExitAsync();
             ExitThread();
         }
 
         protected override void ExitThreadCore()
         {
-            shutdown.Cancel();
+            exiting = true;
             refreshTimer.Stop();
             notification.Visible = false;
-            if (statusWindow != null && !statusWindow.IsDisposed) statusWindow.Close();
-            if (mainWindow != null && !mainWindow.IsDisposed) mainWindow.Close();
+            if (!mainWindow.IsDisposed) mainWindow.Close();
             base.ExitThreadCore();
         }
 
@@ -159,12 +151,10 @@ namespace dotSharK
         {
             if (disposing)
             {
-                shutdown.Cancel();
                 refreshTimer.Dispose();
                 notification.Dispose();
                 menu.Dispose();
                 trayIcon.Dispose();
-                shutdown.Dispose();
             }
             base.Dispose(disposing);
         }
