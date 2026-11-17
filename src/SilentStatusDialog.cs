@@ -130,7 +130,7 @@ namespace dotSharK
             // Only use progress output after the last [开始] line; never show stale
             // percentages from the previously completed download.
             int start = text.LastIndexOf("[开始]", StringComparison.Ordinal);
-            string recent = start >= 0 ? text.Substring(start) : "";
+            string recent = start >= 0 ? text.Substring(start) : text;
             MatchCollection matches = Regex.Matches(recent, @"\[download\]\s+(\d+(?:\.\d+)?)%");
             if (matches.Count > 0)
             {
