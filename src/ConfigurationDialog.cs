@@ -19,6 +19,7 @@ namespace dotSharK
         private readonly DarkTextBox[] toolPaths = new DarkTextBox[4];
         private readonly string[] toolNames = { "yt-dlp.exe", "ffmpeg.exe", "ffprobe.exe", "deno.exe" };
         private TextBox proxyBox, geoProxyBox, profileRootBox, cookieFileBox;
+        private DarkTextBox silentFolderBox;
         private DarkNumericUpDown fragmentsBox;
         private DarkNumericUpDown downloadsBox;
         private DarkNumericUpDown qualityLimitBox;
@@ -40,7 +41,8 @@ namespace dotSharK
         {
             options = options ?? new YtDlpOptions();
             Options = new YtDlpOptions { Proxy = options.Proxy, GeoVerificationProxy = options.GeoVerificationProxy, ConcurrentFragments = options.ConcurrentFragments, ConcurrentDownloads = options.ConcurrentDownloads, VideoQualityLimit = options.VideoQualityLimit, CookieMode = options.CookieMode,
-                CookieBrowser = options.CookieBrowser, CookieProfileRoot = options.CookieProfileRoot, CookieProfile = options.CookieProfile, CookieFile = options.CookieFile };
+                CookieBrowser = options.CookieBrowser, CookieProfileRoot = options.CookieProfileRoot, CookieProfile = options.CookieProfile, CookieFile = options.CookieFile,
+                SilentDownloadFolder = options.SilentDownloadFolder };
             Text = "dotSharK 配置"; StartPosition = FormStartPosition.CenterParent; FormBorderStyle = FormBorderStyle.FixedDialog; Icon = AppBranding.CreateIcon();
             MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false; BackColor = bg; ForeColor = fg; Font = new Font("Microsoft YaHei UI", 9F); ClientSize = new Size(790, 540); MinimumSize = new Size(700, 500);
             var root = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = bg, Padding = new Padding(16), ColumnCount = 1, RowCount = 2 };
@@ -48,9 +50,12 @@ namespace dotSharK
             var tabs = new DarkTabHost { Dock = DockStyle.Fill };
             var toolsPage = new Panel { BackColor = bg, Padding = new Padding(14) };
             var ytPage = new Panel { BackColor = bg, Padding = new Padding(14) };
-            tabs.AddPage("外部工具", toolsPage); tabs.AddPage("YT-DLP", ytPage); root.Controls.Add(tabs, 0, 0);
+            var silentPage = new Panel { BackColor = bg, Padding = new Padding(14) };
+            tabs.AddPage("外部工具", toolsPage); tabs.AddPage("YT-DLP", ytPage);
+            tabs.AddPage("静默下载", silentPage); root.Controls.Add(tabs, 0, 0);
             BuildToolsPage(toolsPage, new[] { ytDlp, ffmpeg, ffprobe, deno });
             BuildYtPage(ytPage);
+            BuildSilentPage(silentPage);
             var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, WrapContents = false, BackColor = bg, Padding = new Padding(0, 8, 0, 0) };
             var save = StyledButton("保存", true); save.Width = 98; save.DialogResult = DialogResult.None;
             var cancel = StyledButton("取消", false); cancel.Width = 98; cancel.DialogResult = DialogResult.Cancel; cancel.Margin = new Padding(0, 0, 10, 0);
@@ -248,6 +253,50 @@ namespace dotSharK
             if (sourceBox.SelectedIndex == 0) Shown += async (s, e) => await SearchDefaultBrowserProfiles();
         }
 
+        private void BuildSilentPage(Panel page)
+        {
+            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 4, BackColor = bg };
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 108));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 94));
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+            var title = new Label { Text = "浏览器右键 · 静默下载", ForeColor = fg,
+                Font = new Font(Font, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
+            layout.Controls.Add(title, 0, 0); layout.SetColumnSpan(title, 3);
+            layout.Controls.Add(StyledLabel("独立保存到"), 0, 1);
+            silentFolderBox = StyledTextBox(Options.SilentDownloadFolder);
+            silentFolderBox.Dock = DockStyle.Fill;
+            silentFolderBox.Margin = new Padding(0, 5, 8, 5);
+            layout.Controls.Add(silentFolderBox, 1, 1);
+            var browse = StyledButton("浏览…", false);
+            browse.Dock = DockStyle.Fill;
+            browse.Margin = new Padding(0, 5, 0, 5);
+            browse.Click += (sender, args) =>
+            {
+                string selected = silentFolderBox.Text.Trim();
+                using (var picker = new FolderBrowserDialog { Description = "选择浏览器静默下载的保存目录",
+                    SelectedPath = Directory.Exists(selected) ? selected :
+                        Environment.GetFolderPath(Environment.SpecialFolder.MyVideos),
+                    ShowNewFolderButton = true })
+                    if (picker.ShowDialog(this) == DialogResult.OK) silentFolderBox.Text = picker.SelectedPath;
+            };
+            layout.Controls.Add(browse, 2, 1);
+            var hint = new Label
+            {
+                Text = "只影响浏览器右键“发送到 dotSharK”下载。主窗口的“保存到”保持独立。" +
+                       Environment.NewLine +
+                       "最高分辨率 / 最高帧率 / HDR / AV1 优先；按已保存的 yt-dlp 代理和 Cookie 下载，不弹窗口。",
+                ForeColor = muted, Dock = DockStyle.Fill, AutoEllipsis = true,
+                TextAlign = ContentAlignment.TopLeft, Padding = new Padding(0, 8, 0, 0)
+            };
+            layout.Controls.Add(hint, 0, 2); layout.SetColumnSpan(hint, 3);
+            page.Controls.Add(layout);
+        }
+
         private void UpdateCookieMode()
         {
             bool file = sourceBox != null && sourceBox.SelectedIndex == 1;
@@ -272,6 +321,21 @@ namespace dotSharK
             { profileStatus.Text = "地域验证代理格式不正确，请检查协议和端口。"; return; }
             Options.Proxy = proxy; Options.GeoVerificationProxy = geoProxy; Options.ConcurrentFragments = (int)fragmentsBox.Value; Options.ConcurrentDownloads = (int)downloadsBox.Value; Options.VideoQualityLimit = (int)qualityLimitBox.Value;
             Options.CookieMode = sourceBox.SelectedIndex == 1 ? "file" : "browser";
+            string silentFolder = silentFolderBox.Text.Trim();
+            if (String.IsNullOrWhiteSpace(silentFolder))
+                silentFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Downloads", "Silent");
+            if (!Path.IsPathRooted(silentFolder))
+            {
+                MessageBox.Show(this, "静默下载目录需要填写完整的绝对路径。", "dotSharK", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            try { silentFolder = Path.GetFullPath(silentFolder); }
+            catch (Exception)
+            {
+                MessageBox.Show(this, "静默下载目录路径无效。", "dotSharK", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            Options.SilentDownloadFolder = silentFolder;
             Options.CookieBrowser = browser == null ? "firefox" : browser.Name;
             Options.CookieProfileRoot = profileRootBox.Text.Trim(); Options.CookieProfile = profileBox.Text.Trim(); Options.CookieFile = cookieFileBox.Text.Trim();
             DialogResult = DialogResult.OK; Close();
