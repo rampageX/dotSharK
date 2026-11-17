@@ -38,7 +38,45 @@ namespace dotSharK
         private readonly System.Windows.Forms.Timer clipboardWatchTimer = new System.Windows.Forms.Timer { Interval = 550 };
         private string clipboardCandidateUrl;
         private bool clipboardFlashBright;
-        private SilentStatusDialog silentStatusWindow;
+        private bool browserAutoRunRequested;
+
+        internal int ActiveDownloadCount { get { return queueItems.Count(x => x.Status == "下载中"); } }
+        internal int PendingDownloadCount { get { return queueItems.Count(x => x.Status == "等待中"); } }
+
+        // The native host's inbox is drained on the WinForms UI thread, even if
+        // the main window is currently hidden in the notification area.
+        internal void EnqueueBrowserUrl(string url, string jobPath)
+        {
+            if (IsDisposed || String.IsNullOrWhiteSpace(url)) return;
+            if (queueItems.Any(x => x.BrowserSilent &&
+                String.Equals(x.Url, url, StringComparison.OrdinalIgnoreCase)))
+            {
+                SilentDownloadBridge.CompleteJob(jobPath);
+                return;
+            }
+
+            AddQueueItem(new DownloadQueueItem
+            {
+                Title = url, Url = url, BrowserSilent = true,
+                BrowserJobPath = jobPath,
+                OutputFolder = SilentDownloadBridge.SilentFolder,
+                Status = "等待中",
+                ProgressWeight = 1
+            });
+            SetState("浏览器已加入队列 · " + url);
+            if (downloadRunning) browserAutoRunRequested = true;
+            else { var run = DownloadQueue(); }
+        }
+
+        internal async Task CancelQueueForExitAsync()
+        {
+            if (!downloadRunning) return;
+            StopQueue();
+            // Cancellation terminates the child yt-dlp process through the
+            // existing process-tree cancellation handler.
+            for (int attempt = 0; attempt < 100 && downloadRunning; attempt++)
+                await Task.Delay(100);
+        }
 
         public MainForm()
         {
@@ -75,19 +113,10 @@ namespace dotSharK
             var logo = new Label { Text = "dotSharK", Font = new Font("Microsoft YaHei UI", 19F, FontStyle.Bold), ForeColor = green, AutoSize = true, Location = new Point(0, 0) };
             var tagline = new Label { Text = "做最快的 yt-dlp 桌面外壳", ForeColor = muted, AutoSize = true, Location = new Point(0, 13) };
             logo.SizeChanged += (s, e) => tagline.Left = logo.Right + 10;
-            var actionsHost = new TableLayoutPanel { Dock = DockStyle.Right, Width = 222, ColumnCount = 2,
-                RowCount = 1, Padding = new Padding(0, 9, 0, 9), BackColor = bg };
-            actionsHost.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
-            actionsHost.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
-            actionsHost.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            var silentQueueButton = GhostButton("静默下载", 108);
-            silentQueueButton.Dock = DockStyle.Fill;
-            silentQueueButton.Margin = new Padding(0, 0, 4, 0);
-            silentQueueButton.Click += (s, e) => ShowSilentDownloadStatus();
+            var configHost = new Panel { Dock = DockStyle.Right, Width = 110, Padding = new Padding(0, 9, 0, 9) };
             configButton = GhostButton("配置…", 110); configButton.Dock = DockStyle.Fill; configButton.Click += OpenConfiguration;
-            actionsHost.Controls.Add(silentQueueButton, 0, 0);
-            actionsHost.Controls.Add(configButton, 1, 0);
-            brand.Controls.Add(logo); brand.Controls.Add(tagline); tagline.Left = logo.Right + 10; brand.Controls.Add(actionsHost); root.Controls.Add(brand, 0, 0);
+            configHost.Controls.Add(configButton);
+            brand.Controls.Add(logo); brand.Controls.Add(tagline); tagline.Left = logo.Right + 10; brand.Controls.Add(configHost); root.Controls.Add(brand, 0, 0);
 
             var entry = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, BackColor = bg, Padding = new Padding(0, 9, 0, 9) };
             entry.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); entry.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104));
@@ -361,8 +390,14 @@ namespace dotSharK
                                     AppendLog("[" + item.Title + "] " + lineText);
                                     ReportDownloadLine(item, itemProgress, lineText);
                                 };
-                                if (item.PlaylistItem) await client.DownloadPlaylistItemAsync(item, ytdlpOptions, output, cancellationToken);
-                                else await client.DownloadAsync(item.Media, item.Video, item.Audio, item.AudioOnly, item.Container, item.OutputFolder, item.Subtitle, ytdlpOptions, output, cancellationToken);
+                                if (item.BrowserSilent)
+                                    await client.DownloadSilentAsync(item.Url, item.OutputFolder,
+                                        SilentDownloadBridge.ArchivePath, ytdlpOptions, output, cancellationToken);
+                                else if (item.PlaylistItem)
+                                    await client.DownloadPlaylistItemAsync(item, ytdlpOptions, output, cancellationToken);
+                                else
+                                    await client.DownloadAsync(item.Media, item.Video, item.Audio, item.AudioOnly,
+                                        item.Container, item.OutputFolder, item.Subtitle, ytdlpOptions, output, cancellationToken);
                                 item.Status = "已完成";
                                 SetItemProgress(item, 1, 100);
                             }
@@ -373,6 +408,8 @@ namespace dotSharK
                             }
                             catch (Exception ex) { item.Status = "失败"; AppendLog("[失败] " + item.Title + " · " + ex.Message); }
                             UpdateQueueRow(item);
+                            if (item.BrowserSilent && (item.Status == "已完成" || item.Status == "失败"))
+                                SilentDownloadBridge.CompleteJob(item.BrowserJobPath);
                         }
                         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                         {
@@ -391,9 +428,13 @@ namespace dotSharK
             }
             finally
             {
+                bool continueNewBrowserJobs = browserAutoRunRequested && !queueStopRequested;
+                browserAutoRunRequested = false;
                 downloadRunning = false; queueStopRequested = false; progress.Visible = false; currentRunItems.Clear(); currentRunProgress.Clear(); analyzeButton.Enabled = true;
                 if (queueCancellation != null) { queueCancellation.Dispose(); queueCancellation = null; }
                 UpdateQueueControls();
+                if (continueNewBrowserJobs && queueItems.Any(x => x.Status == "等待中"))
+                    BeginInvoke((Action)(async () => await DownloadQueue()));
             }
         }
 
@@ -460,6 +501,8 @@ namespace dotSharK
                 {
                     if (IsDisposed || !currentRunProgress.ContainsKey(item)) return;
                     currentRunProgress[item] = Math.Max(currentRunProgress[item], Math.Max(0, Math.Min(1, fraction)));
+                    item.ProgressPercent = itemPercent;
+                    UpdateQueueRow(item);
                     UpdateQueueProgressDisplay(item, itemPercent);
                 }));
             }
@@ -506,15 +549,25 @@ namespace dotSharK
         private void AddQueueItem(DownloadQueueItem item)
         {
             queueItems.Add(item);
-            string quality = item.AudioOnly ? "仅音频" : item.PlaylistItem
+            string quality = item.BrowserSilent ? "最高画质 · AV1 优先"
+                : item.AudioOnly ? "仅音频" : item.PlaylistItem
                 ? (item.TargetHeight > 0 ? item.TargetHeight + "p " + item.TargetCodec : "最高可用")
                 : (item.Video == null ? "自动" : item.Video.Label);
-            int row = queueGrid.Rows.Add(item.Title, item.PlaylistItem ? "播放列表" : "单视频", quality, item.Status);
+            string source = item.BrowserSilent ? "浏览器" : item.PlaylistItem ? "播放列表" : "单视频";
+            int row = queueGrid.Rows.Add(item.Title, source, quality, item.Status);
             queueGrid.Rows[row].Tag = item; queueCountLabel.Text = "下载队列（" + queueItems.Count + "）"; UpdateQueueControls();
         }
         private void UpdateQueueRow(DownloadQueueItem item)
         {
-            foreach (DataGridViewRow row in queueGrid.Rows) if (ReferenceEquals(row.Tag, item)) { row.Cells[3].Value = item.Status; break; }
+            foreach (DataGridViewRow row in queueGrid.Rows)
+                if (ReferenceEquals(row.Tag, item))
+                {
+                    row.Cells[0].Value = item.Title;
+                    row.Cells[3].Value = item.Status == "下载中" && item.ProgressPercent > 0
+                        ? "下载中 " + item.ProgressPercent.ToString("0.#", CultureInfo.InvariantCulture) + "%"
+                        : item.Status;
+                    break;
+                }
         }
         private void UpdateQueueControls()
         {
@@ -532,7 +585,12 @@ namespace dotSharK
         {
             foreach (DataGridViewRow row in queueGrid.SelectedRows.Cast<DataGridViewRow>().ToList())
             {
-                var item = row.Tag as DownloadQueueItem; if (item != null && item.Status != "下载中") queueItems.Remove(item);
+                var item = row.Tag as DownloadQueueItem;
+                if (item != null && item.Status != "下载中")
+                {
+                    queueItems.Remove(item);
+                    if (item.BrowserSilent) SilentDownloadBridge.CompleteJob(item.BrowserJobPath);
+                }
                 if (!row.IsNewRow) queueGrid.Rows.Remove(row);
             }
             UpdateQueueControls();
@@ -542,7 +600,12 @@ namespace dotSharK
             foreach (DataGridViewRow row in queueGrid.Rows.Cast<DataGridViewRow>().ToList())
             {
                 var item = row.Tag as DownloadQueueItem;
-                if (item != null && (item.Status == "已完成" || item.Status == "失败")) { queueItems.Remove(item); queueGrid.Rows.Remove(row); }
+                if (item != null && (item.Status == "已完成" || item.Status == "失败"))
+                {
+                    queueItems.Remove(item);
+                    if (item.BrowserSilent) SilentDownloadBridge.CompleteJob(item.BrowserJobPath);
+                    queueGrid.Rows.Remove(row);
+                }
             }
             UpdateQueueControls();
         }
@@ -598,23 +661,6 @@ namespace dotSharK
             using (var d = new FolderBrowserDialog { Description = "选择视频保存目录", SelectedPath = Directory.Exists(folderBox.Text) ? folderBox.Text : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Downloads"), ShowNewFolderButton = true })
                 if (d.ShowDialog(this) == DialogResult.OK) folderBox.Text = d.SelectedPath;
         }
-        private void ShowSilentDownloadStatus()
-        {
-            if (silentStatusWindow == null || silentStatusWindow.IsDisposed)
-            {
-                silentStatusWindow = new SilentStatusDialog();
-                silentStatusWindow.FormClosed += (s, e) => silentStatusWindow = null;
-                silentStatusWindow.Show(this);
-            }
-            else
-            {
-                if (silentStatusWindow.WindowState == FormWindowState.Minimized)
-                    silentStatusWindow.WindowState = FormWindowState.Normal;
-                silentStatusWindow.BringToFront();
-                silentStatusWindow.Activate();
-            }
-        }
-
         private void OpenConfiguration(object sender, EventArgs e)
         {
             using (var d = new ConfigurationDialog(ytDlpPath, ffmpegPath, ffprobePath, denoPath, ytdlpOptions))
