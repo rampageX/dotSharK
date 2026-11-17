@@ -1,0 +1,52 @@
+name: dotSharK UI V2 Stage 5 acceptance
+on:
+  push:
+    branches:
+      - ci/ui-v2-stage5-acceptance-20261117
+jobs:
+  windows:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify base and build original plus UI preview
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $src = (Get-Content ui-v2/DarkComboBox.cs -Raw)
+          if (-not $src.Contains('bool needsScrollbar = items.Count > visible;') -or
+              -not $src.Contains('var layout = new TableLayoutPanel')) {
+            throw 'Latest accepted dropdown scrollbar fix is missing'
+          }
+          dotnet build src/dotSharK.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'Original dotSharK compilation failed' }
+          dotnet build ui-v2/UiV2Stage4Preview.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'V2 preview compilation failed' }
+      - name: Seven screens, min/large settings, keyboard and data regression
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe'
+          & $compiler /nologo /codepage:65001 /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Core.dll /r:ui-v2\bin\Release\DotSharK.UiFoundation.dll /out:UiV2Stage5Acceptance.exe ci-tests\UiV2Stage5Acceptance.cs
+          if ($LASTEXITCODE -ne 0) { throw 'Stage5 harness compilation failed' }
+          Copy-Item ui-v2\bin\Release\DotSharK.UiFoundation.dll .
+          Copy-Item ui-v2\bin\Release\UiV2Stage4Preview.exe .
+          New-Item -ItemType Directory -Force Screenshots | Out-Null
+          & .\UiV2Stage5Acceptance.exe (Resolve-Path Screenshots).Path (Resolve-Path .\UiV2Stage4Preview.exe).Path
+          if ($LASTEXITCODE -ne 0) { throw 'Stage5 Windows actual UI regression failed' }
+      - name: Package portable Windows preview and screenshot evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force package\Preview,package\Tests | Out-Null
+          Copy-Item ui-v2\bin\Release\UiV2Stage4Preview.exe package\Preview
+          Copy-Item ui-v2\bin\Release\DotSharK.UiFoundation.dll package\Preview
+          Copy-Item ci-tests\UiV2Stage5Acceptance.cs package\Tests
+          Copy-Item Screenshots package\Screenshots -Recurse
+          Compress-Archive -Path package\* -DestinationPath dotSharK_UI_V2_Stage5_Acceptance_Windows.zip -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dotSharK-ui-v2-stage5-seven-screens
+          path: dotSharK_UI_V2_Stage5_Acceptance_Windows.zip
+          if-no-files-found: error
