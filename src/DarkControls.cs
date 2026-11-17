@@ -62,12 +62,23 @@ namespace dotSharK
     internal sealed class DarkButton : Button
     {
         internal bool Primary { get; set; }
+        private bool attentionHighlight;
+        internal bool AttentionHighlight
+        {
+            get { return attentionHighlight; }
+            set
+            {
+                if (attentionHighlight == value) return;
+                attentionHighlight = value;
+                ApplyStyle();
+            }
+        }
         internal DarkButton() { FlatStyle = FlatStyle.Flat; UseVisualStyleBackColor = false; Cursor = Cursors.Hand; Height = DarkPalette.ControlHeight; MinimumSize = new Size(0, DarkPalette.ControlHeight); Margin = new Padding(0); }
         protected override void OnCreateControl() { base.OnCreateControl(); ApplyStyle(); }
         protected override void OnEnabledChanged(EventArgs e) { base.OnEnabledChanged(e); ApplyStyle(); }
         private void ApplyStyle()
         {
-            BackColor = Primary ? DarkPalette.Accent : DarkPalette.Surface;
+            BackColor = Primary ? (attentionHighlight && Enabled ? Color.FromArgb(49, 185, 123) : DarkPalette.Accent) : DarkPalette.Surface;
             ForeColor = DarkPalette.Foreground;
             FlatAppearance.BorderSize = Primary ? 0 : 1;
             FlatAppearance.BorderColor = DarkPalette.Border;
