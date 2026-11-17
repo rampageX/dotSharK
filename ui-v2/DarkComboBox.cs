@@ -298,12 +298,18 @@ namespace dotSharK.UiV2
             width = Math.Min(width, work.Width);
             int height = visible * Theme.ControlHeight + 2;
 
-            view = new PopupView(this) { Dock = DockStyle.Fill, BackColor = Theme.Input };
+            view = new PopupView(this)
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Theme.Input,
+                Margin = Padding.Empty
+            };
             // Keep the scroll position model for wheel/keyboard navigation, but
             // never reserve or paint a scrollbar when every item fits.
             scrollbar = new DarkScrollBar
             {
-                Dock = DockStyle.Right,
+                Dock = DockStyle.Fill,
+                Margin = Padding.Empty,
                 Visible = needsScrollbar,
                 Enabled = needsScrollbar
             };
@@ -311,10 +317,24 @@ namespace dotSharK.UiV2
             scrollbar.Maximum = Math.Max(0, items.Count - visible);
             scrollbar.Value = Math.Max(0, Math.Min(scrollbar.Maximum, selectedIndex));
             scrollbar.ValueChanged += (s, e) => view.Invalidate();
-            popupPanel = new Panel { BackColor = Theme.Input, Size = new Size(width, height), Margin = Padding.Empty };
-            popupPanel.Controls.Add(view);
-            popupPanel.Controls.Add(scrollbar);
-            scrollbar.BringToFront();
+            // A two-column layout gives the scrollbar its own width only when
+            // required. Dock.Fill alone could let the list paint underneath it.
+            var layout = new TableLayoutPanel
+            {
+                BackColor = Theme.Input,
+                Size = new Size(width, height),
+                Margin = Padding.Empty,
+                Padding = Padding.Empty,
+                ColumnCount = 2,
+                RowCount = 1
+            };
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute,
+                needsScrollbar ? Theme.ScrollbarWidth : 0));
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            layout.Controls.Add(view, 0, 0);
+            layout.Controls.Add(scrollbar, 1, 0);
+            popupPanel = layout;
             var host = new ToolStripControlHost(popupPanel)
             {
                 AutoSize = false, Size = popupPanel.Size,
