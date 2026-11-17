@@ -73,6 +73,7 @@ namespace dotSharK
         {
             if (IsDisposed || String.IsNullOrWhiteSpace(url)) return;
             if (queueItems.Any(x => x.BrowserSilent &&
+                (x.Status == "等待中" || x.Status == "下载中" || x.Status == "已暂停") &&
                 String.Equals(x.Url, url, StringComparison.OrdinalIgnoreCase)))
             {
                 SilentDownloadBridge.CompleteJob(jobPath);
