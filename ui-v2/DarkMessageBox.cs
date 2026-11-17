@@ -111,9 +111,6 @@ namespace dotSharK.UiV2
                     case MessageBoxButtons.AbortRetryIgnore: return new List<Tuple<string, DialogResult>> {
                         Tuple.Create("中止", DialogResult.Abort), Tuple.Create("重试", DialogResult.Retry),
                         Tuple.Create("忽略", DialogResult.Ignore) };
-                    case MessageBoxButtons.CancelTryContinue: return new List<Tuple<string, DialogResult>> {
-                        Tuple.Create("取消", DialogResult.Cancel), Tuple.Create("重试", DialogResult.TryAgain),
-                        Tuple.Create("继续", DialogResult.Continue) };
                     default: return new List<Tuple<string, DialogResult>> {
                         Tuple.Create("确定", DialogResult.OK) };
                 }
