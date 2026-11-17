@@ -119,7 +119,7 @@ namespace dotSharK
         {
             playlist = list; sample = sampleMedia;
             Text = "播放列表 · 选择视频并加入队列"; StartPosition = FormStartPosition.CenterParent; FormBorderStyle = FormBorderStyle.Sizable;
-            MinimumSize = new Size(900, 620); Size = new Size(1080, 760); BackColor = DarkPalette.Background; ForeColor = DarkPalette.Foreground;
+            MinimumSize = new Size(900, 620); Size = new Size(1200, 760); BackColor = DarkPalette.Background; ForeColor = DarkPalette.Foreground;
             Font = new Font("Microsoft YaHei UI", 9F); Icon = AppBranding.CreateIcon();
             var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(20, 16, 20, 16), BackColor = DarkPalette.Background };
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 56)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
