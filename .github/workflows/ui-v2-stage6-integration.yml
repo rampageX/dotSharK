@@ -32,7 +32,7 @@ jobs:
           New-Item -ItemType Directory -Force standalone | Out-Null
           Copy-Item src/bin/Release/dotSharK.exe standalone/
           $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe'
-          & $compiler /nologo /codepage:65001 /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Core.dll /out:standalone/SingleExeAcceptance.exe ci-tests/SingleExeAcceptance.cs
+          & $compiler /nologo /codepage:65001 /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Core.dll /out:standalone\SingleExeAcceptance.exe ci-tests\SingleExeAcceptance.cs
           if ($LASTEXITCODE -ne 0) { throw 'Single EXE harness compile failed' }
           & ./standalone/SingleExeAcceptance.exe
           if ($LASTEXITCODE -ne 0) { throw 'Single EXE isolation test failed' }
