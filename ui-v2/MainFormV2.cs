@@ -160,6 +160,7 @@ namespace dotSharK
                     ColumnCount = 5, RowCount = 1, Margin = Padding.Empty,
                     Padding = Padding.Empty, BackColor = Theme.Window
                 };
+                brand.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space24 * 2));
                 brand.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
                 brand.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.Space16));
                 brand.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -194,6 +195,7 @@ namespace dotSharK
                     ColumnCount = 3, RowCount = 1, Margin = Padding.Empty,
                     Padding = Padding.Empty, BackColor = Theme.Window
                 };
+                address.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ActionHeight));
                 address.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
                 address.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.Space8));
                 address.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.AnalyzeButtonWidth));
@@ -228,6 +230,7 @@ namespace dotSharK
                     ColumnCount = 6, RowCount = 1, Margin = Padding.Empty,
                     Padding = Padding.Empty, BackColor = Theme.Window
                 };
+                toolbar.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight));
                 toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
                 toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.QueueRunButtonWidth));
                 toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.Space8));
@@ -333,6 +336,7 @@ namespace dotSharK
                     RowCount = 1, Margin = Padding.Empty, Padding = Padding.Empty,
                     BackColor = Theme.Window
                 };
+                path.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight));
                 path.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.LabelColumnWidth));
                 path.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
                 path.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.Space8));
@@ -368,6 +372,7 @@ namespace dotSharK
                     ColumnCount = 5, RowCount = 1, BackColor = Theme.Window,
                     Margin = Padding.Empty, Padding = Padding.Empty
                 };
+                footer.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ActionHeight));
                 footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
                 footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.Space24 * 7));
                 footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.Space16));
