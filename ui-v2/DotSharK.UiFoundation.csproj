@@ -25,6 +25,25 @@
     <Compile Include="Theme.cs" />
     <Compile Include="DarkNative.cs" />
     <Compile Include="DarkForm.cs" />
+    <Compile Include="TextButton.cs" />
+    <Compile Include="SecondaryButton.cs" />
+    <Compile Include="PrimaryButton.cs" />
+    <Compile Include="IconButton.cs" />
+    <Compile Include="FlatTextBox.cs" />
+    <Compile Include="FlatTextArea.cs" />
+    <Compile Include="DarkToolTip.cs" />
+    <Compile Include="DarkTextContextMenu.cs" />
+    <Compile Include="DarkTabStrip.cs" />
+    <Compile Include="DarkScrollBar.cs" />
+    <Compile Include="DarkPaint.cs" />
+    <Compile Include="DarkNumeric.cs" />
+    <Compile Include="DarkMessageBox.cs" />
+    <Compile Include="DarkListView.cs" />
+    <Compile Include="DarkDataGridView.cs" />
+    <Compile Include="DarkContextMenuRenderer.cs" />
+    <Compile Include="DarkComboBox.cs" />
+    <Compile Include="DarkCheckBox.cs" />
+    <Compile Include="DarkButtonBase.cs" />
     <None Include="app.manifest" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
