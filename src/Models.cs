@@ -8,6 +8,11 @@ namespace dotSharK
     {
         public string Proxy = "";
         public string GeoVerificationProxy = "";
+        public bool ProxyEnabled = true;
+        public bool GeoProxyEnabled = true;
+        public string Aria2cPath = "";
+        public string Aria2cSites = "";
+        public string CustomArguments = "";
         public int ConcurrentFragments = 8;
         public int ConcurrentDownloads = 3;
         public int VideoQualityLimit = 3; // Distinct resolution tiers; 0 = show all.
@@ -62,6 +67,7 @@ namespace dotSharK
         public MediaInfo Media;
         public bool AudioOnly, AutomaticSubtitle, PlaylistItem, BrowserSilent;
         public string BrowserJobPath;
+        public string OriginPageUrl;
         public VideoChoice Video;
         public AudioChoice Audio;
         public SubtitleChoice Subtitle;
