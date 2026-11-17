@@ -107,7 +107,7 @@ namespace dotSharK.UiV2
 
             if (e.CellBounds.Width > 0 && e.CellBounds.Height > 0)
             {
-                if (e.Cell is DataGridViewCheckBoxCell)
+                if (Rows[e.RowIndex].Cells[e.ColumnIndex] is DataGridViewCheckBoxCell)
                 {
                     bool check = e.Value is bool && (bool)e.Value;
                     int x = e.CellBounds.X + (e.CellBounds.Width - Theme.CheckboxSize) / 2;
