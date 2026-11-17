@@ -1,4 +1,4 @@
-# dotSharK 1.0.6 Portable Preview
+# dotSharK 1.0.6
 
 dotSharK 是一个轻量的 Windows yt-dlp 图形外壳，使用 **C#、WinForms 和 .NET Framework 4.8** 编写。程序使用暗色界面和绿色强调色，实际解析与下载由用户选择的 yt-dlp 完成。
 
@@ -48,6 +48,15 @@ dotnet build src\dotSharK.csproj -c Release
 
 构建输出位于 `src\bin\Release\dotSharK.exe`。项目不依赖 Visual Studio IDE。
 
+## 1.0.6 更新内容
+
+- 运行数据便携化：浏览器任务位于程序目录的 SilentQueue，托盘日志位于 Logs，Native Host 清单位于 BrowserExtension/NativeMessaging。
+- 代理设置可随 INI 跨用户和电脑携带；兼容读取原用户的旧加密设置，保存后使用便携格式（代理账号密码不再加密）。
+- 来源、质量方案、状态三列按完整文字及自绘留白保证列宽，视频列使用剩余空间。
+- 取消已下载档案拦截，允许重复提交、删除后重新下载及更换分辨率；不再读取 downloaded.txt。
+- 恢复浏览器下载过程日志和退出码；只有确认实际输出文件存在才标记完成。
+- 修复运行中新增任务不能使用空闲并发名额的问题，持续补位并遵守同时下载数上限。
+
 ## 1.0.5 更新内容
 
 - 正式集成 UI V2：统一七个主要界面的暗黑主题、布局和控件。
@@ -85,7 +94,7 @@ dotnet build src\dotSharK.csproj -c Release
 yt-dlp 项目与使用说明：<https://github.com/yt-dlp/yt-dlp>
 
 
-## 便携测试版
+## 便携运行
 
 任务记录：`SilentQueue/Pending`、`SilentQueue/Active`，不使用已下载档案拦截重复下载；托盘日志：`Logs/tray-ui.log`。配置与已完成任务仍位于 EXE 同级。不同程序目录独立运行。旧 AppData 记录不自动迁移。
 
