@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -7,6 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using System.Web.Script.Serialization;
 
 namespace dotSharK
 {
@@ -16,7 +18,7 @@ namespace dotSharK
         private const string YtDlpStable = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe";
         private const string YtDlpNightly = "https://github.com/yt-dlp/yt-dlp-nightly-builds/releases/latest/download/yt-dlp.exe";
         private const string FfmpegStable = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip";
-        private const string FfmpegNightly = "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip";
+        private const string FfmpegNightly = "https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip";
         private const string DenoStable = "https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip";
         private const string DenoCanaryLatest = "https://dl.deno.land/canary-x86_64-pc-windows-msvc-latest.txt";
         private const string GyanReleaseVersion = "https://www.gyan.dev/ffmpeg/builds/release-version";
@@ -68,10 +70,10 @@ namespace dotSharK
             {
                 if (!nightly)
                     return "FFmpeg " + (await DownloadTextAsync(GyanReleaseVersion, proxy, false)).Trim();
-                string json = await DownloadTextAsync("https://api.github.com/repos/BtbN/FFmpeg-Builds/releases/tags/latest", proxy, true);
-                Match asset = Regex.Match(json, "ffmpeg-N-(\\d+-g[0-9a-fA-F]+)-win64-gpl\\.zip", RegexOptions.IgnoreCase);
-                if (!asset.Success) throw new InvalidDataException("BtbN 未返回可识别的 FFmpeg Nightly 版本号。");
-                return "FFmpeg N-" + asset.Groups[1].Value;
+                // The rolling "latest" release deliberately uses master-latest filenames.
+                // Numbered N-xxxxx builds are published in the latest autobuild-* release.
+                string json = await DownloadTextAsync("https://api.github.com/repos/FFmpeg-Builds/FFmpeg-Builds/releases?per_page=10", proxy, true);
+                return "FFmpeg " + ParseFfmpegNightlyVersion(json);
             }
             if (!nightly)
             {
@@ -81,6 +83,36 @@ namespace dotSharK
             string commit = (await DownloadTextAsync(DenoCanaryLatest, proxy, false)).Trim().TrimStart('\uFEFF');
             if (commit.Length < 7 || commit.Any(c => !Uri.IsHexDigit(c))) throw new InvalidDataException("Deno Canary 返回了无效版本号。");
             return "Deno Canary " + commit;
+        }
+
+        internal static string ParseFfmpegNightlyVersion(string json)
+        {
+            // Use release assets, not the rolling "latest" tag or display text.
+            // Both FFmpeg and FFprobe are in the same win64 GPL build archive.
+            var releases = new JavaScriptSerializer { MaxJsonLength = Int32.MaxValue }.DeserializeObject(json) as object[];
+            if (releases == null) throw new InvalidDataException("FFmpeg Nightly 版本数据格式不正确。");
+            foreach (var release in releases)
+            {
+                var fields = release as Dictionary<string, object>;
+                if (fields == null) continue;
+                object tagValue;
+                if (!fields.TryGetValue("tag_name", out tagValue) || tagValue == null ||
+                    !Convert.ToString(tagValue, CultureInfo.InvariantCulture).StartsWith("autobuild-", StringComparison.OrdinalIgnoreCase)) continue;
+                object assetsValue;
+                if (!fields.TryGetValue("assets", out assetsValue)) continue;
+                var assets = assetsValue as object[];
+                if (assets == null) continue;
+                foreach (var asset in assets)
+                {
+                    var entry = asset as Dictionary<string, object>;
+                    object nameValue;
+                    if (entry == null || !entry.TryGetValue("name", out nameValue) || nameValue == null) continue;
+                    Match version = Regex.Match(Convert.ToString(nameValue, CultureInfo.InvariantCulture),
+                        @"^ffmpeg-(N-\d+-g[0-9a-fA-F]+)-win64-gpl\.zip$", RegexOptions.IgnoreCase);
+                    if (version.Success) return version.Groups[1].Value;
+                }
+            }
+            throw new InvalidDataException("FFmpeg-Builds 最近的自动构建未提供可识别的 Windows x64 GPL Nightly 文件。");
         }
 
         private static bool IsCurrentOrNewer(int toolIndex, bool nightly, string current, string remote)
