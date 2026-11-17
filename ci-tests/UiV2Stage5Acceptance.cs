@@ -152,6 +152,24 @@ internal static class UiV2Stage5Acceptance
                 typeof(DarkComboBox).GetMethod("OnKeyDown", Flags).Invoke(cb,
                     new object[] { new KeyEventArgs(Keys.End) });
                 Check(cb.SelectedIndex == 2, "end key navigates combo");
+                cb.DroppedDown = true;
+                Application.DoEvents();
+                Check(cb.DroppedDown, "combo popup opens");
+                var viewField = typeof(DarkComboBox).GetField("view", Flags);
+                var view = viewField.GetValue(cb) as Control;
+                Check(view != null, "combo owns custom dark popup view");
+                view.GetType().GetMethod("OnKeyDown", Flags).Invoke(view,
+                    new object[] { new KeyEventArgs(Keys.Escape) });
+                Check(!cb.DroppedDown && form.Visible,
+                    "Esc closes combo popup, not its parent dialog");
+                cb.DroppedDown = true;
+                Application.DoEvents();
+                cb.SelectedIndex = 1;
+                view = viewField.GetValue(cb) as Control;
+                view.GetType().GetMethod("OnKeyDown", Flags).Invoke(view,
+                    new object[] { new KeyEventArgs(Keys.Enter) });
+                Check(!cb.DroppedDown && cb.SelectedIndex == 1,
+                    "Enter commits combo choice and closes popup");
             }
 
             Console.WriteLine("PASS: " + checks + " Stage 5 Windows UI assertions");
