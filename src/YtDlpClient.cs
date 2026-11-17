@@ -534,7 +534,7 @@ namespace dotSharK
         {
             using (var memory = new MemoryStream())
             {
-                await stream.CopyToAsync(memory);
+                await stream.CopyToAsync(memory).ConfigureAwait(false);
                 return DecodeToolOutput(memory.ToArray());
             }
         }
@@ -552,7 +552,7 @@ namespace dotSharK
                     if (value.Length != 0 && onLine != null) onLine(value);
                 };
                 int n;
-                while ((n = await stream.ReadAsync(bytes, 0, bytes.Length)) > 0)
+                while ((n = await stream.ReadAsync(bytes, 0, bytes.Length).ConfigureAwait(false)) > 0)
                 {
                     for (int i = 0; i < n; i++)
                     {
