@@ -79,6 +79,7 @@ namespace dotSharK
                     Dock = DockStyle.Fill, BackColor = Theme.Window,
                     Margin = Padding.Empty, Padding = Padding.Empty
                 };
+                filters.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight));
                 filters.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
                 filters.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.Space8));
                 filters.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
@@ -192,6 +193,7 @@ namespace dotSharK
                 Margin = Padding.Empty, Padding = Padding.Empty,
                 BackColor = Theme.Window
             };
+            group.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight));
             group.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, labelWidth));
             group.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.Space8));
             group.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -354,6 +356,7 @@ namespace dotSharK
                     Margin = Padding.Empty, Padding = Padding.Empty,
                     BackColor = Theme.Window
                 };
+                options.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight));
                 float baseUnit = 100f / 6f;
                 for (int i = 0; i < 5; i++)
                 {
@@ -384,6 +387,7 @@ namespace dotSharK
                     BackColor = Theme.Window, Margin = Padding.Empty,
                     Padding = Padding.Empty
                 };
+                actions.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight));
                 actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.BrowseButtonWidth));
                 actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.Space8));
                 actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.BrowseButtonWidth));
