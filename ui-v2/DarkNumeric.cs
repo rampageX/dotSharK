@@ -38,7 +38,7 @@ namespace dotSharK.UiV2
             {
                 if (e.KeyCode == Keys.Up || e.KeyCode == Keys.Down)
                 { Step(e.KeyCode == Keys.Up ? 1 : -1); e.Handled = true; e.SuppressKeyPress = true; }
-                else if (e.KeyCode == Keys.Enter) { Commit(); e.Handled = true; }
+                else if (e.KeyCode == Keys.Enter) Commit(); // let the Form invoke AcceptButton
             };
             input.Enter += (s, e) => { focused = true; Invalidate(); };
             input.Leave += (s, e) => { focused = false; Commit(); Invalidate(); };

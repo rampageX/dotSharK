@@ -17,8 +17,8 @@ namespace dotSharK.UiV2
         private const int EmGetLineCount = 0x00BA;
         private const int EmLineScroll = 0x00B6;
         private readonly DarkScrollBar scrollbar;
-        private readonly Timer sync;
-        private bool updating;
+        private readonly EditHook hook;
+        private bool updating, syncPosted;
 
         public FlatTextArea()
         {
@@ -43,9 +43,11 @@ namespace dotSharK.UiV2
                 editor.MouseWheel += (s, e) => BeginSync();
                 editor.KeyUp += (s, e) => BeginSync();
                 editor.MouseUp += (s, e) => BeginSync();
-                sync = new Timer { Interval = 100 };
-                sync.Tick += (s, e) => SyncScrollBar();
-                sync.Start();
+                // NativeWindow observes scrolling without a per-editor polling timer.
+                hook = new EditHook(BeginSync);
+                editor.HandleCreated += (s, e) => { hook.AssignHandle(editor.Handle); BeginSync(); };
+                editor.HandleDestroyed += (s, e) => { if (hook.Handle != IntPtr.Zero) hook.ReleaseHandle(); };
+                if (editor.IsHandleCreated) { hook.AssignHandle(editor.Handle); BeginSync(); }
             }
             finally { ResumeLayout(true); }
         }
@@ -59,7 +61,17 @@ namespace dotSharK.UiV2
 
         private void BeginSync()
         {
-            if (!IsDisposed && IsHandleCreated) BeginInvoke((Action)(() => SyncScrollBar()));
+            if (IsDisposed || !IsHandleCreated || syncPosted) return;
+            syncPosted = true;
+            try
+            {
+                BeginInvoke((Action)(() =>
+                {
+                    syncPosted = false;
+                    if (!IsDisposed) SyncScrollBar();
+                }));
+            }
+            catch (InvalidOperationException) { syncPosted = false; }
         }
         private int NativeLineCount
         {
@@ -94,9 +106,22 @@ namespace dotSharK.UiV2
                 DarkNative.SendMessage(editor.Handle, EmLineScroll, IntPtr.Zero,
                     new IntPtr(offset));
         }
+        private sealed class EditHook : NativeWindow
+        {
+            private readonly Action changed;
+            internal EditHook(Action changed) { this.changed = changed; }
+            protected override void WndProc(ref Message m)
+            {
+                base.WndProc(ref m);
+                // WM_VSCROLL, WM_MOUSEWHEEL, WM_KEYUP, WM_LBUTTONUP.
+                if (m.Msg == 0x0115 || m.Msg == 0x020A ||
+                    m.Msg == 0x0101 || m.Msg == 0x0202)
+                    changed();
+            }
+        }
         protected override void Dispose(bool disposing)
         {
-            if (disposing && sync != null) { sync.Stop(); sync.Dispose(); }
+            if (disposing && hook != null && hook.Handle != IntPtr.Zero) hook.ReleaseHandle();
             base.Dispose(disposing);
         }
     }

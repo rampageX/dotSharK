@@ -12,6 +12,7 @@ namespace dotSharK.UiV2
     public sealed class DarkListView : ListView
     {
         private readonly DarkScrollBar bar;
+        private readonly ImageList rowSizingImages;
         private int hoverRow = -1;
         private bool syncing;
         public string EmptyText { get; set; } = "";
@@ -31,6 +32,12 @@ namespace dotSharK.UiV2
             HeaderStyle = ColumnHeaderStyle.Nonclickable;
             CheckBoxes = false;
             BackColor = Theme.Panel;
+            rowSizingImages = new ImageList
+            {
+                ImageSize = new Size(1, Theme.TableRowHeight),
+                ColorDepth = ColorDepth.Depth32Bit
+            };
+            SmallImageList = rowSizingImages;
             bar = new DarkScrollBar { Dock = DockStyle.Right };
             Controls.Add(bar);
             bar.BringToFront();
@@ -159,6 +166,8 @@ namespace dotSharK.UiV2
         protected override void WndProc(ref Message m)
         {
             base.WndProc(ref m);
+            if (m.Msg == 0x0005 || m.Msg == 0x000F || m.Msg == 0x0115)
+                HideNativeScrollBars();
             if (m.Msg == 0x000F && Items.Count == 0 && !String.IsNullOrEmpty(EmptyText))
             {
                 using (Graphics g = CreateGraphics())
@@ -170,6 +179,11 @@ namespace dotSharK.UiV2
                         TextFormatFlags.HorizontalCenter);
                 }
             }
+        }
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) rowSizingImages.Dispose();
+            base.Dispose(disposing);
         }
     }
 }

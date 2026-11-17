@@ -34,14 +34,18 @@ namespace dotSharK.UiV2
             public void RemoveAt(int index)
             {
                 items.RemoveAt(index);
-                if (owner.SelectedIndex >= items.Count) owner.SelectedIndex = items.Count - 1;
+                if (owner.SelectedIndex == index)
+                    owner.SelectedIndex = Math.Min(index, items.Count - 1);
+                else if (owner.SelectedIndex > index)
+                    owner.SelectedIndex = owner.SelectedIndex - 1;
                 owner.NotifyItemsChanged();
             }
             public bool Remove(object item)
             {
-                bool result = items.Remove(item);
-                if (result) owner.NotifyItemsChanged();
-                return result;
+                int index = items.IndexOf(item);
+                if (index < 0) return false;
+                RemoveAt(index);
+                return true;
             }
             public bool Contains(object item) { return items.Contains(item); }
             public int IndexOf(object item) { return items.IndexOf(item); }
@@ -207,7 +211,7 @@ namespace dotSharK.UiV2
             if (items.Count == 0 || String.IsNullOrEmpty(text)) return -1;
             for (int step = 1; step <= items.Count; step++)
             {
-                int i = (Math.Max(0, selectedIndex) + step) % items.Count;
+                int i = ((selectedIndex < 0 ? -1 : selectedIndex) + step) % items.Count;
                 if (Convert.ToString(items[i]).StartsWith(text, StringComparison.CurrentCultureIgnoreCase))
                     return i;
             }
@@ -275,6 +279,7 @@ namespace dotSharK.UiV2
         private sealed class PopupView : Control
         {
             private readonly DarkComboBox owner;
+            private readonly DarkToolTip tooltip = new DarkToolTip();
             private int hoverIndex = -1;
             internal PopupView(DarkComboBox owner)
             {
@@ -309,11 +314,18 @@ namespace dotSharK.UiV2
             protected override void OnMouseMove(MouseEventArgs e)
             {
                 base.OnMouseMove(e);
-                hoverIndex = RowAt(e.Y);
+                int index = RowAt(e.Y);
+                if (index == hoverIndex) return;
+                hoverIndex = index;
+                string tip = index >= 0 && index < owner.Items.Count ?
+                    Convert.ToString(owner.Items[index]) : "";
+                if (TextRenderer.MeasureText(tip, owner.Font).Width <= Width - Theme.Space16)
+                    tip = "";
+                tooltip.SetToolTip(this, tip);
                 Invalidate();
             }
             protected override void OnMouseLeave(EventArgs e)
-            { base.OnMouseLeave(e); hoverIndex = -1; Invalidate(); }
+            { base.OnMouseLeave(e); hoverIndex = -1; tooltip.SetToolTip(this, ""); Invalidate(); }
             protected override void OnMouseUp(MouseEventArgs e)
             {
                 base.OnMouseUp(e);
@@ -360,6 +372,8 @@ namespace dotSharK.UiV2
                     owner.scrollbar.Value = Math.Max(0, Math.Min(owner.scrollbar.Maximum, found));
                 Invalidate();
             }
+            protected override void Dispose(bool disposing)
+            { if (disposing) tooltip.Dispose(); base.Dispose(disposing); }
         }
     }
 }

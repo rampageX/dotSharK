@@ -54,8 +54,9 @@ namespace dotSharK.UiV2
         protected override void OnMouseUp(MouseEventArgs e)
         {
             base.OnMouseUp(e);
-            if (e.Button == MouseButtons.Left && pressed && ClientRectangle.Contains(e.Location))
-            { Focus(); OnClick(EventArgs.Empty); }
+            // WmMouseUp already raises OnClick for StandardClick controls.
+            // Calling OnClick here a second time would undo the checkbox toggle.
+            if (e.Button == MouseButtons.Left && ClientRectangle.Contains(e.Location)) Focus();
             pressed = false;
             Invalidate();
         }
