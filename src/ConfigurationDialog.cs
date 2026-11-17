@@ -269,12 +269,14 @@ namespace dotSharK
             layout.Controls.Add(title, 0, 0); layout.SetColumnSpan(title, 3);
             layout.Controls.Add(StyledLabel("独立保存到"), 0, 1);
             silentFolderBox = StyledTextBox(Options.SilentDownloadFolder);
-            silentFolderBox.Dock = DockStyle.Fill;
-            silentFolderBox.Margin = new Padding(0, 5, 8, 5);
+            silentFolderBox.Height = DarkPalette.ControlHeight;
+            silentFolderBox.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            silentFolderBox.Margin = new Padding(0, 0, 8, 0);
             layout.Controls.Add(silentFolderBox, 1, 1);
             var browse = StyledButton("浏览…", false);
-            browse.Dock = DockStyle.Fill;
-            browse.Margin = new Padding(0, 5, 0, 5);
+            browse.Height = DarkPalette.ControlHeight;
+            browse.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            browse.Margin = Padding.Empty;
             browse.Click += (sender, args) =>
             {
                 string selected = silentFolderBox.Text.Trim();
