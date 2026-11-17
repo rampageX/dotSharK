@@ -495,121 +495,110 @@ namespace dotSharK
 
         private void BuildSilentPage(Panel page)
         {
-            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 4, BackColor = bg };
-            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 108));
-            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 94));
-            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            var content = new TableLayoutPanel
+            {
+                ColumnCount = 1, RowCount = 5, Margin = Padding.Empty,
+                Padding = Padding.Empty, BackColor = bg,
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink
+            };
+            content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            content.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight));
+            content.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space12));
+            content.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight));
+            content.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space12));
+            content.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space12 * 4));
 
-            var title = new Label { Text = "浏览器右键 · 静默下载", ForeColor = fg,
-                Font = new Font(Font, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
-            layout.Controls.Add(title, 0, 0); layout.SetColumnSpan(title, 3);
-            layout.Controls.Add(StyledLabel("独立保存到"), 0, 1);
+            content.Controls.Add(Label("浏览器右键 · 静默下载", true), 0, 0);
             silentFolderBox = StyledTextBox(Options.SilentDownloadFolder);
-            silentFolderBox.Height = DarkPalette.ControlHeight;
-            silentFolderBox.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-            silentFolderBox.Margin = new Padding(0, 0, 8, 0);
-            layout.Controls.Add(silentFolderBox, 1, 1);
+            silentFolderBox.Name = "txtSilentFolder";
             var browse = StyledButton("浏览…", false);
-            browse.Height = DarkPalette.ControlHeight;
-            browse.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-            browse.Margin = Padding.Empty;
+            browse.Name = "btnBrowseSilentFolder";
             browse.Click += (sender, args) =>
             {
                 string selected = silentFolderBox.Text.Trim();
-                using (var picker = new FolderBrowserDialog { Description = "选择浏览器静默下载的保存目录",
+                using (var picker = new FolderBrowserDialog
+                {
+                    Description = "选择浏览器静默下载的保存目录",
                     SelectedPath = Directory.Exists(selected) ? selected :
                         Environment.GetFolderPath(Environment.SpecialFolder.MyVideos),
-                    ShowNewFolderButton = true })
-                    if (picker.ShowDialog(this) == DialogResult.OK) silentFolderBox.Text = picker.SelectedPath;
+                    ShowNewFolderButton = true
+                })
+                if (picker.ShowDialog(this) == DialogResult.OK)
+                    silentFolderBox.Text = picker.SelectedPath;
             };
-            layout.Controls.Add(browse, 2, 1);
-            var hint = new Label
-            {
-                Text = "只影响浏览器右键“发送到 dotSharK”下载。主窗口的“保存到”保持独立。" +
-                       Environment.NewLine +
-                       "最高分辨率 / 最高帧率 / HDR / AV1 优先；按已保存的 yt-dlp 代理和 Cookie 下载，不弹窗口。",
-                ForeColor = muted, Dock = DockStyle.Fill, AutoEllipsis = true,
-                TextAlign = ContentAlignment.TopLeft, Padding = new Padding(0, 8, 0, 0)
-            };
-            layout.Controls.Add(hint, 0, 2); layout.SetColumnSpan(hint, 3);
-            page.Controls.Add(layout);
+            content.Controls.Add(Row(
+                Fixed(Theme.LabelColumnWidth, Label("独立保存到")),
+                Fill(silentFolderBox), Fixed(Theme.Space8),
+                Fixed(Theme.BrowseButtonWidth, browse)), 0, 2);
+            content.Controls.Add(Row(
+                Fixed(Theme.LabelColumnWidth), Fill(Note(
+                    "只影响浏览器右键“发送到 dotSharK”下载。主窗口的“保存到”保持独立。" +
+                    Environment.NewLine +
+                    "最高分辨率 / 最高帧率 / HDR / AV1 优先；按已保存的 yt-dlp 代理和 Cookie 下载，不弹窗口。"))), 0, 4);
+            Scrolled(page, content);
         }
 
-        private CheckBox StyledToggle(string title, bool isChecked)
+        private DarkCheckBox StyledToggle(string title, bool isChecked)
         {
-            return new CheckBox { Text = title, Checked = isChecked, BackColor = bg, ForeColor = fg,
-                AutoSize = false, Dock = DockStyle.Fill, FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
-                Margin = new Padding(3, 0, 0, 0) };
+            return new DarkCheckBox
+            {
+                Text = title, Checked = isChecked, ForeColor = Theme.PrimaryText,
+                BackColor = Theme.Window, Margin = Padding.Empty
+            };
         }
 
         private void BuildAdvancedPage(Panel page)
         {
-            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 6,
-                BackColor = bg, Padding = new Padding(2) };
-            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 29));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 96));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 53));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 31));
-            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 49));
-
-            layout.Controls.Add(new Label { Text = "使用 aria2c 下载的站点",
-                ForeColor = fg, Font = new Font(Font, FontStyle.Bold),
-                Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
-            layout.Controls.Add(new Label { Text = "以下站点不使用代理",
-                ForeColor = fg, Font = new Font(Font, FontStyle.Bold),
-                Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 1, 0);
-            ariaSitesBox = new DarkTextBox { Text = Options.Aria2cSites ?? "", Dock = DockStyle.Fill,
-                Multiline = true, ScrollBars = ScrollBars.Vertical, BackColor = field, ForeColor = fg,
-                Margin = new Padding(0, 0, 7, 0) };
-            noProxySitesBox = new DarkTextBox { Text = Options.NoProxySites ?? "", Dock = DockStyle.Fill,
-                Multiline = true, ScrollBars = ScrollBars.Vertical, BackColor = field, ForeColor = fg,
-                Margin = new Padding(7, 0, 0, 0) };
-            layout.Controls.Add(ariaSitesBox, 0, 1);
-            layout.Controls.Add(noProxySitesBox, 1, 1);
-
-            layout.Controls.Add(new Label
+            var root = new TableLayoutPanel
             {
-                Text = "空格/换行分隔域名，如 youtube.com，自动覆盖所有子域名；按输入网页网址匹配，不看视频 CDN。",
-                ForeColor = muted, Dock = DockStyle.Fill, AutoEllipsis = true,
-                Padding = new Padding(0, 5, 9, 0)
-            }, 0, 2);
-            layout.Controls.Add(new Label
-            {
-                Text = "规则相同；命中时主代理和地域验证代理均不使用，已保存的代理地址不受影响。",
-                ForeColor = muted, Dock = DockStyle.Fill, AutoEllipsis = true,
-                Padding = new Padding(7, 5, 0, 0)
-            }, 1, 2);
-            var commandTitle = new Label
-            {
-                Text = "自定义 yt-dlp 原生命令行参数（下载与分析均生效）",
-                ForeColor = fg, Font = new Font(Font, FontStyle.Bold),
-                Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft
+                ColumnCount = 3, RowCount = 7, Margin = Padding.Empty,
+                Padding = Padding.Empty, BackColor = bg,
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink
             };
-            layout.Controls.Add(commandTitle, 0, 3);
-            layout.SetColumnSpan(commandTitle, 2);
-            customArgumentsBox = new DarkTextBox { Text = Options.CustomArguments ?? "",
-                Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Vertical,
-                BackColor = field, ForeColor = fg };
-            layout.Controls.Add(customArgumentsBox, 0, 4);
-            layout.SetColumnSpan(customArgumentsBox, 2);
-            var hint = new Label
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.Space16));
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space24 * 5));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space24 * 2));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space24));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space24 * 4));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space24 * 2));
+
+            root.Controls.Add(Label("使用 aria2c 下载的站点", true), 0, 0);
+            root.Controls.Add(Label("以下站点不使用代理", true), 2, 0);
+            ariaSitesBox = new FlatTextArea
             {
-                Text = "例如 --retries 20 --no-mtime；支持带引号的参数值，自定义参数覆盖一般内置设置。" +
-                       Environment.NewLine +
-                       "无代理站点规则优先于自定义代理参数。aria2c.exe 在「外部工具」页指定。",
-                ForeColor = muted, Dock = DockStyle.Fill, AutoEllipsis = true,
-                Padding = new Padding(0, 7, 0, 0)
+                Name = "txtAria2cSites", Text = Options.Aria2cSites ?? "",
+                Font = Theme.MonoFont, Dock = DockStyle.Fill, Margin = Padding.Empty
             };
-            layout.Controls.Add(hint, 0, 5);
-            layout.SetColumnSpan(hint, 2);
-            page.Controls.Add(layout);
+            noProxySitesBox = new FlatTextArea
+            {
+                Name = "txtNoProxySites", Text = Options.NoProxySites ?? "",
+                Font = Theme.MonoFont, Dock = DockStyle.Fill, Margin = Padding.Empty
+            };
+            root.Controls.Add(ariaSitesBox, 0, 1);
+            root.Controls.Add(noProxySitesBox, 2, 1);
+            root.Controls.Add(Note("空格/换行分隔域名，如 youtube.com，自动覆盖所有子域名；按输入网页网址匹配，不看视频 CDN。"), 0, 2);
+            root.Controls.Add(Note("规则相同；命中时主代理和地域验证代理均不使用，已保存的代理地址不受影响。"), 2, 2);
+            var commandTitle = Label("自定义 yt-dlp 原生命令行参数（下载与分析均生效）", true);
+            root.Controls.Add(commandTitle, 0, 4);
+            root.SetColumnSpan(commandTitle, 3);
+            customArgumentsBox = new FlatTextArea
+            {
+                Name = "txtCustomYtDlpArgs",
+                Text = Options.CustomArguments ?? "",
+                Font = Theme.MonoFont, Dock = DockStyle.Fill, Margin = Padding.Empty
+            };
+            root.Controls.Add(customArgumentsBox, 0, 5);
+            root.SetColumnSpan(customArgumentsBox, 3);
+            var hint = Note("例如 --retries 20 --no-mtime；支持带引号的参数值，自定义参数覆盖一般内置设置。" +
+                Environment.NewLine +
+                "无代理站点规则优先于自定义代理参数。aria2c.exe 在「外部工具」页指定。");
+            root.Controls.Add(hint, 0, 6);
+            root.SetColumnSpan(hint, 3);
+            Scrolled(page, root);
         }
 
         private void UpdateCookieMode()
