@@ -438,7 +438,38 @@ internal static class UiV2Stage6Acceptance
                 Field(item, "PlaylistItem", true);
                 Field(item, "Container", "MP4");
                 Invoke(main, "AddQueueItem", item);
-                Pump((Task)Invoke(main, "DownloadQueue"), "integrated queue local HTTP transfer");
+                Field(opt, "ConcurrentDownloads", 3);
+                server.AllowBody.Reset();
+                Task queueRun = (Task)Invoke(main, "DownloadQueue");
+                var later = new List<object>();
+                try
+                {
+                    for (int i = 0; i < 3; i++)
+                    {
+                        var added = New("DownloadQueueItem");
+                        Field(added, "Title", "Later arrival " + i);
+                        Field(added, "Url", server.Url);
+                        Field(added, "OutputFolder", Path.Combine(folder, "Later" + i));
+                        Field(added, "Status", "等待中");
+                        Field(added, "PlaylistItem", true);
+                        Field(added, "Container", "MP4");
+                        Invoke(main, "AddQueueItem", added);
+                        later.Add(added);
+                    }
+                    var deadline = DateTime.UtcNow.AddSeconds(15);
+                    while (DateTime.UtcNow < deadline &&
+                        later.Count(x => (string)Field(x, "Status") == "下载中") < 2)
+                    { Application.DoEvents(); Thread.Sleep(25); }
+                    Check((string)Field(item, "Status") == "下载中" &&
+                        later.Count(x => (string)Field(x, "Status") == "下载中") == 2,
+                        "later arrivals fill two idle slots before initial transfer completes");
+                    Check((string)Field(later[2], "Status") == "等待中",
+                        "fourth item respects concurrency limit of three");
+                }
+                finally { server.AllowBody.Set(); }
+                Pump(queueRun, "integrated dynamic queue local HTTP transfer");
+                Check(later.All(x => (string)Field(x, "Status") == "已完成"),
+                    "all later arrivals complete in same queue run");
                 Check((string)Field(item, "Status") == "已完成",
                     "actual integrated download queue finishes");
                 Check(Directory.GetFiles((string)Field(item, "OutputFolder"), "*.mp4").Length > 0,
@@ -472,6 +503,7 @@ internal static class UiV2Stage6Acceptance
         readonly Thread worker;
         readonly byte[] body;
         volatile bool stopping;
+        internal readonly ManualResetEventSlim AllowBody = new ManualResetEventSlim(true);
         internal string Url { get; private set; }
         internal LocalServer(byte[] bytes)
         {
@@ -500,13 +532,16 @@ internal static class UiV2Stage6Acceptance
                             "Content-Length: " + body.Length + "\r\nAccept-Ranges: bytes\r\nConnection: close\r\n\r\n");
                         stream.Write(h, 0, h.Length);
                         if (!head.StartsWith("HEAD ", StringComparison.OrdinalIgnoreCase))
+                        {
+                            AllowBody.Wait();
                             stream.Write(body, 0, body.Length);
+                        }
                         stream.Flush();
                     }
                 }
                 catch { if (!stopping) Thread.Sleep(30); }
             }
         }
-        public void Dispose() { stopping = true; listener.Stop(); worker.Join(1500); }
+        public void Dispose() { stopping = true; AllowBody.Set(); listener.Stop(); worker.Join(1500); }
     }
 }

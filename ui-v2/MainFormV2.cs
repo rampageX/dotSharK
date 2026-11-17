@@ -636,7 +636,7 @@ namespace dotSharK
                 UpdateQueueProgressDisplay(null, 0);
                 using (var slots = new System.Threading.SemaphoreSlim(Math.Max(1, Math.Min(6, ytdlpOptions.ConcurrentDownloads))))
                 {
-                    await Task.WhenAll(pending.Select(async item =>
+                    Func<DownloadQueueItem, Task> runItem = async item =>
                     {
                         bool acquired = false;
                         try
@@ -698,7 +698,29 @@ namespace dotSharK
                             // Items that did not start remain queued for the next manual resume.
                         }
                         finally { if (acquired) slots.Release(); }
-                    }));
+                    };
+                    var scheduled = new HashSet<DownloadQueueItem>();
+                    var running = new List<Task>();
+                    while (true)
+                    {
+                        if (!cancellationToken.IsCancellationRequested && !queueStopRequested)
+                        {
+                            foreach (var added in queueItems.Where(x => x.Status == "等待中" && !scheduled.Contains(x)).ToList())
+                            {
+                                scheduled.Add(added);
+                                if (!pending.Contains(added))
+                                {
+                                    pending.Add(added);
+                                    currentRunProgress[added] = 0;
+                                }
+                                running.Add(runItem(added));
+                            }
+                        }
+                        if (running.All(task => task.IsCompleted)) break;
+                        // Keep admitting later arrivals while earlier transfers are in flight.
+                        await Task.WhenAny(Task.WhenAll(running), Task.Delay(200));
+                    }
+                    await Task.WhenAll(running);
                 }
                 int failed = pending.Count(x => x.Status == "失败");
                 int completed = pending.Count(x => x.Status == "已完成");
