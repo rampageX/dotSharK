@@ -12,6 +12,7 @@ namespace dotSharK
         public bool GeoProxyEnabled = true;
         public string Aria2cPath = "";
         public string Aria2cSites = "";
+        public string NoProxySites = "";
         public string CustomArguments = "";
         public int ConcurrentFragments = 8;
         public int ConcurrentDownloads = 3;
