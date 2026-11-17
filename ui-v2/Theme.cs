@@ -39,7 +39,7 @@ namespace dotSharK.UiV2
         public const int AnalyzeButtonWidth = 96;
         public const int QueueRunButtonWidth = 120;
         public const int SourceColumnWidth = 84;
-        public const int QualityColumnWidth = 160;
+        public const int QualityColumnWidth = 150;
         public const int StatusColumnWidth = 184;
 
         public const int BodyFontPx = 13;

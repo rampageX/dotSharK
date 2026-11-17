@@ -1,10 +1,10 @@
-# 浏览器右键发送到 dotSharK（统一队列测试版）
+# 浏览器右键发送到 dotSharK（便携版）
 
 适用 Chromium 系浏览器（Chrome / Edge / Catsxp 等），Catsxp 的 Native Messaging 仍以用户本机实测为准。
 
 ## 安装
 
-1. 解压完整测试包（含 `dotSharK.exe` 和 `BrowserExtension`）。
+1. 解压完整便携包（含 `dotSharK.exe` 和 `BrowserExtension`）。
 2. 浏览器扩展管理页面开启开发者模式，选择「加载已解压的扩展程序」，指向 `BrowserExtension` 文件夹。
 3. 复制扩展 ID，在解压目录的 PowerShell 运行：
 
@@ -34,8 +34,11 @@
 扩展升级：如果原扩展目录不变，将新版 `background.js` 与 `manifest.json` 覆盖到原扩展目录，然后到浏览器扩展管理页点击「重新加载」。扩展 ID 和 EXE 位置未变化时，无需重新注册 Native Messaging。
 
 文件：
-- 浏览器任务收件箱：`%LOCALAPPDATA%\dotSharK\SilentQueue\Pending`
-- 下载中的持久记录：`%LOCALAPPDATA%\dotSharK\SilentQueue\Active`
-- 已下载媒体档案：`%LOCALAPPDATA%\dotSharK\SilentQueue\downloaded.txt`
+- 浏览器任务收件箱：`EXE 同级的 SilentQueue\Pending`
+- 下载中的持久记录：`EXE 同级的 SilentQueue\Active`
+- 不使用已下载档案拦截重复下载，删除文件后可重新下载，也可选择其它分辨率。
 
-这是测试版，建议先结束旧版 dotSharK 进程再覆盖 EXE，以免旧版独立后台进程抢任务。浏览器扩展 ID 和 Native Messaging 注册的 EXE 路径不变时无需重新安装。
+升级前请先退出旧版 dotSharK 再覆盖程序文件，以免旧版独立后台进程抢任务。浏览器扩展 ID 和 Native Messaging 注册的 EXE 路径不变时无需重新安装。
+
+
+便携版：任务写入 EXE 同级 `SilentQueue`；托盘诊断写入 `Logs/tray-ui.log`；Native Host 清单写入 `BrowserExtension/NativeMessaging`。不自动迁移旧 AppData 记录。移动目录或换电脑后重新运行注册脚本，浏览器集成仍需要当前用户的注册表入口。

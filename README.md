@@ -1,4 +1,4 @@
-# dotSharK 1.0.5
+# dotSharK 1.0.6
 
 dotSharK 是一个轻量的 Windows yt-dlp 图形外壳，使用 **C#、WinForms 和 .NET Framework 4.8** 编写。程序使用暗色界面和绿色强调色，实际解析与下载由用户选择的 yt-dlp 完成。
 
@@ -20,7 +20,7 @@ dotSharK 是一个轻量的 Windows yt-dlp 图形外壳，使用 **C#、WinForms
 - 「高级下载 → 以下站点不使用代理」可按域名指定直连站点（例如 `bilibili.com`，自动覆盖所有子域名，按输入网页 URL 而非视频 CDN 匹配）。命中后跳过主代理、地域验证代理；如该站点也使用 aria2c，则显式覆盖 aria2c 的代理配置，保留其它 aria2c 设置。此规则优先于自定义 yt-dlp 的代理项。
 - 中文输出改为原始字节解码：优先严格 UTF-8，若无效则尝试 GB18030，兼容 Windows 平台 yt-dlp/aria2c 的不同控制台编码，避免视频标题与日志出现 `����`。
 - Cookie 可从浏览器配置或 Netscape 格式的 Cookie 文件读取。浏览器配置支持递归搜索；找到多个配置时优先选择 Cookie 数据库最新的一个。
-- 代理配置使用当前 Windows 用户的 DPAPI 加密后保存在 EXE 同级 `dotSharK.ini`。
+- 代理配置以 URL 转义文本保存在 EXE 同级 `dotSharK.ini`，可跨用户和电脑携带；如代理含账号密码，请妥善保管此文件。旧 DPAPI 配置在原用户下仍可读取，下次保存转成便携格式。
 - 下载目录可自定义；留空时保存到 EXE 同级的 `Downloads` 目录。
 
 程序不读取 yt-dlp 外部配置文件，代理、并发、Cookie 与其他下载参数由 dotSharK 传给 yt-dlp。
@@ -47,6 +47,15 @@ dotnet build src\dotSharK.csproj -c Release
 ```
 
 构建输出位于 `src\bin\Release\dotSharK.exe`。项目不依赖 Visual Studio IDE。
+
+## 1.0.6 更新内容
+
+- 运行数据便携化：浏览器任务位于程序目录的 SilentQueue，托盘日志位于 Logs，Native Host 清单位于 BrowserExtension/NativeMessaging。
+- 代理设置可随 INI 跨用户和电脑携带；兼容读取原用户的旧加密设置，保存后使用便携格式（代理账号密码不再加密）。
+- 来源、质量方案、状态三列按完整文字及自绘留白保证列宽，视频列使用剩余空间。
+- 取消已下载档案拦截，允许重复提交、删除后重新下载及更换分辨率；不再读取 downloaded.txt。
+- 恢复浏览器下载过程日志和退出码；只有确认实际输出文件存在才标记完成。
+- 修复运行中新增任务不能使用空闲并发名额的问题，持续补位并遵守同时下载数上限。
 
 ## 1.0.5 更新内容
 
@@ -83,3 +92,10 @@ dotnet build src\dotSharK.csproj -c Release
 - 保留暗色滚动条、统一控件高度和绿色强调色。
 
 yt-dlp 项目与使用说明：<https://github.com/yt-dlp/yt-dlp>
+
+
+## 便携运行
+
+任务记录：`SilentQueue/Pending`、`SilentQueue/Active`，不使用已下载档案拦截重复下载；托盘日志：`Logs/tray-ui.log`。配置与已完成任务仍位于 EXE 同级。不同程序目录独立运行。旧 AppData 记录不自动迁移。
+
+浏览器 Native Host 清单在 `BrowserExtension/NativeMessaging`；浏览器集成仍需注册，移动程序或换电脑需重跑安装脚本。自定义工具、Cookie、下载位置若配置为绝对路径，换盘或换电脑需调整；浏览器 Cookie 仍由浏览器自身管理。

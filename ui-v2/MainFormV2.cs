@@ -73,6 +73,7 @@ namespace dotSharK
         {
             if (IsDisposed || String.IsNullOrWhiteSpace(url)) return;
             if (queueItems.Any(x => x.BrowserSilent &&
+                (x.Status == "等待中" || x.Status == "下载中" || x.Status == "已暂停") &&
                 String.Equals(x.Url, url, StringComparison.OrdinalIgnoreCase)))
             {
                 SilentDownloadBridge.CompleteJob(jobPath);
@@ -289,7 +290,7 @@ namespace dotSharK
                 });
                 queueGrid.Columns.Add(new DataGridViewTextBoxColumn
                 {
-                    Name = "quality", HeaderText = "质量方案", Width = Theme.QualityColumnWidth,
+                    Name = "quality", HeaderText = "质量方案", MinimumWidth = Theme.QualityColumnWidth, Width = Theme.QualityColumnWidth,
                     AutoSizeMode = DataGridViewAutoSizeColumnMode.None
                 });
                 queueGrid.Columns.Add(new DataGridViewTextBoxColumn
@@ -297,6 +298,8 @@ namespace dotSharK
                     Name = "status", HeaderText = "状态", Width = Theme.StatusColumnWidth,
                     AutoSizeMode = DataGridViewAutoSizeColumnMode.None
                 });
+                EnsureQueueColumnWidths();
+                queueGrid.FontChanged += (s, e) => EnsureQueueColumnWidths();
                 queueGrid.SelectionChanged += (s, e) => UpdateQueueControls();
                 // Dark context menu includes file/folder actions for completed tasks.
                 var queueMenu = DarkContextMenuRendererV2();
@@ -633,7 +636,7 @@ namespace dotSharK
                 UpdateQueueProgressDisplay(null, 0);
                 using (var slots = new System.Threading.SemaphoreSlim(Math.Max(1, Math.Min(6, ytdlpOptions.ConcurrentDownloads))))
                 {
-                    await Task.WhenAll(pending.Select(async item =>
+                    Func<DownloadQueueItem, Task> runItem = async item =>
                     {
                         bool acquired = false;
                         try
@@ -662,7 +665,7 @@ namespace dotSharK
                                 };
                                 if (item.BrowserSilent)
                                     await client.DownloadSilentAsync(item.Url, item.OutputFolder,
-                                        SilentDownloadBridge.ArchivePath, ytdlpOptions, output, linkedToken.Token);
+                                        ytdlpOptions, output, linkedToken.Token);
                                 else if (item.PlaylistItem)
                                     await client.DownloadPlaylistItemAsync(item, ytdlpOptions, output, linkedToken.Token);
                                 else
@@ -695,7 +698,29 @@ namespace dotSharK
                             // Items that did not start remain queued for the next manual resume.
                         }
                         finally { if (acquired) slots.Release(); }
-                    }));
+                    };
+                    var scheduled = new HashSet<DownloadQueueItem>();
+                    var running = new List<Task>();
+                    while (true)
+                    {
+                        if (!cancellationToken.IsCancellationRequested && !queueStopRequested)
+                        {
+                            foreach (var added in queueItems.Where(x => x.Status == "等待中" && !scheduled.Contains(x)).ToList())
+                            {
+                                scheduled.Add(added);
+                                if (!pending.Contains(added))
+                                {
+                                    pending.Add(added);
+                                    currentRunProgress[added] = 0;
+                                }
+                                running.Add(runItem(added));
+                            }
+                        }
+                        if (running.All(task => task.IsCompleted)) break;
+                        // Keep admitting later arrivals while earlier transfers are in flight.
+                        await Task.WhenAny(Task.WhenAll(running), Task.Delay(200));
+                    }
+                    await Task.WhenAll(running);
                 }
                 int failed = pending.Count(x => x.Status == "失败");
                 int completed = pending.Count(x => x.Status == "已完成");
@@ -1034,6 +1059,8 @@ namespace dotSharK
             if (!String.IsNullOrWhiteSpace(item.DisplayQuality)) quality = item.DisplayQuality;
             else item.DisplayQuality = quality;
             int row = queueGrid.Rows.Add(item.Title, source, quality, item.Status);
+            EnsureTextColumnWidth("source", source, Theme.SourceColumnWidth);
+            EnsureQualityWidth(quality);
             EnsureStatusWidth(item.Status);
             queueGrid.Rows[row].Tag = item; queueCountLabel.Text = "下载队列（" + queueItems.Count + "）"; UpdateQueueControls();
         }
@@ -1051,13 +1078,36 @@ namespace dotSharK
                     break;
                 }
         }
+        private void EnsureQueueColumnWidths()
+        {
+            if (queueGrid == null || !queueGrid.Columns.Contains("status")) return;
+            EnsureTextColumnWidth("source", "播放列表", Theme.SourceColumnWidth);
+            EnsureQualityWidth("1080p 以内 · AV1 优先");
+            EnsureStatusWidth("下载中 100%");
+            foreach (DataGridViewRow row in queueGrid.Rows)
+            {
+                EnsureTextColumnWidth("source", Convert.ToString(row.Cells["source"].Value), Theme.SourceColumnWidth);
+                EnsureQualityWidth(Convert.ToString(row.Cells["quality"].Value));
+                EnsureStatusWidth(Convert.ToString(row.Cells["status"].Value));
+            }
+        }
+        private void EnsureTextColumnWidth(string name, string text, int minimum)
+        {
+            // Use the same GDI flags and 12px left/right insets as DarkPaint.DrawText.
+            int required = TextRenderer.MeasureText(text ?? "", queueGrid.Font, Size.Empty,
+                TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine).Width + Theme.Space24 + Theme.Space8;
+            var column = queueGrid.Columns[name];
+            int width = Math.Max(minimum, required);
+            if (column.MinimumWidth < width) column.MinimumWidth = width;
+            if (column.Width < width) column.Width = width;
+        }
+        private void EnsureQualityWidth(string quality)
+        {
+            EnsureTextColumnWidth("quality", quality, Theme.QualityColumnWidth + Theme.Space24 + Theme.Space8);
+        }
         private void EnsureStatusWidth(string status)
         {
-            // Custom painted cell has 12px text insets on both sides.
-            int required = TextRenderer.MeasureText(status ?? "", queueGrid.Font, Size.Empty,
-                TextFormatFlags.NoPadding).Width + Theme.Space24 + Theme.Space8;
-            if (queueGrid.Columns["status"].Width < required)
-                queueGrid.Columns["status"].Width = required;
+            EnsureTextColumnWidth("status", status, Theme.StatusColumnWidth);
         }
 
         private void UpdateQueueControls()
@@ -1199,6 +1249,8 @@ namespace dotSharK
                             try { ytdlpOptions.GeoVerificationProxy = System.Text.Encoding.UTF8.GetString(System.Security.Cryptography.ProtectedData.Unprotect(Convert.FromBase64String(value), null, System.Security.Cryptography.DataProtectionScope.CurrentUser)); }
                             catch { ytdlpOptions.GeoVerificationProxy = ""; }
                         }
+                        else if (key == "proxy-portable") ytdlpOptions.Proxy = value;
+                        else if (key == "geo-proxy-portable") ytdlpOptions.GeoVerificationProxy = value;
                         else if (key == "folder") folderBox.Text = value;
                         else if (key == "yt-dlp") ytDlpPath = value;
                         else if (key == "ffmpeg") ffmpegPath = value;
@@ -1234,11 +1286,9 @@ namespace dotSharK
             if (loadingSettings) return;
             try
             {
-                string protectedProxy = Convert.ToBase64String(System.Security.Cryptography.ProtectedData.Protect(System.Text.Encoding.UTF8.GetBytes(ytdlpOptions.Proxy ?? ""), null, System.Security.Cryptography.DataProtectionScope.CurrentUser));
-                string protectedGeoProxy = Convert.ToBase64String(System.Security.Cryptography.ProtectedData.Protect(System.Text.Encoding.UTF8.GetBytes(ytdlpOptions.GeoVerificationProxy ?? ""), null, System.Security.Cryptography.DataProtectionScope.CurrentUser));
                 savedMainWindow = WindowPlacement.Capture(this, lastMainMaximized);
-                File.WriteAllLines(settingsPath, new[] { "proxy=" + protectedProxy,
-                    "geo-proxy=" + protectedGeoProxy,
+                File.WriteAllLines(settingsPath, new[] { "proxy-portable=" + Uri.EscapeDataString(ytdlpOptions.Proxy ?? ""),
+                    "geo-proxy-portable=" + Uri.EscapeDataString(ytdlpOptions.GeoVerificationProxy ?? ""),
                     "proxy-enabled=" + (ytdlpOptions.ProxyEnabled ? "1" : "0"),
                     "geo-proxy-enabled=" + (ytdlpOptions.GeoProxyEnabled ? "1" : "0"),
                     "folder=" + Uri.EscapeDataString(folderBox == null ? "" : folderBox.Text),

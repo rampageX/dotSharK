@@ -33,6 +33,10 @@ internal static class UiV2Stage6Acceptance
             Directory.CreateDirectory(screenshots);
             app = Assembly.LoadFrom(Path.GetFullPath(args[1]));
             Check(Type("MainFormV2") != null && Type("SilentTrayContext") != null, "integrated V2 and tray are in production EXE");
+            var bridge = Type("SilentDownloadBridge");
+            string expectedRoot = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SilentQueue");
+            Check((string)bridge.GetField("DataRoot", F).GetValue(null) == expectedRoot, "portable queue anchored to EXE directory");
+            Check((string)Type("SilentTrayContext").GetField("UiLog", F).GetValue(null) == Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Logs", "tray-ui.log"), "portable tray log anchored to EXE directory");
             var media = Media();
             var playlist = Playlist();
             using (var main = NewForm("MainFormV2"))
@@ -47,7 +51,41 @@ internal static class UiV2Stage6Acceptance
                     "source compact and status readable");
                 Check(queue.ContextMenuStrip.Items.Cast<ToolStripItem>().Any(x => x.Text == "打开下载目录"),
                     "completed menu includes open folder");
+                string qualityText = "1080p 以内 · AV1 优先";
+                Font originalFont = queue.Font;
+                foreach (float scale in new[] { 1f, 1.25f, 1.5f })
+                {
+                    using (var scaledFont = new Font(originalFont.FontFamily, originalFont.Size * scale))
+                    {
+                        queue.Font = scaledFont;
+                        main.GetType().GetMethod("EnsureQualityWidth", F).Invoke(main, new object[] { qualityText });
+                        int measured = TextRenderer.MeasureText(qualityText, queue.Font, Size.Empty,
+                            TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine).Width;
+                        Check(queue.Columns["quality"].Width - Theme.Space24 >= measured,
+                            "quality text and custom paint insets fit at font scale " + scale);
+                        foreach (string[] sample in new[] { new[] { "source", "播放列表" }, new[] { "status", "下载中 100%" } })
+                        {
+                            int textWidth = TextRenderer.MeasureText(sample[1], queue.Font, Size.Empty,
+                                TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine).Width;
+                            Check(queue.Columns[sample[0]].Width - Theme.Space24 >= textWidth,
+                                sample[0] + " full text fits at font scale " + scale);
+                        }
+                        Check(queue.Columns["title"].AutoSizeMode == DataGridViewAutoSizeColumnMode.Fill,
+                            "video receives all remaining width at font scale " + scale);
+                        queue.Font = originalFont;
+                    }
+                }
                 Save(main, "Main.png");
+                var portableOptions = Field(main, "ytdlpOptions");
+                string proxy = "socks5://user:p@ss@127.0.0.1:1080";
+                Field(portableOptions, "Proxy", proxy);
+                main.GetType().GetMethod("SaveSettings", F).Invoke(main, null);
+                Check(File.ReadAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "dotSharK.ini")).Contains("proxy-portable=" + Uri.EscapeDataString(proxy)), "proxy saved without user-bound encryption");
+                Field(portableOptions, "Proxy", "");
+                main.GetType().GetMethod("LoadSettings", F).Invoke(main, null);
+                Check((string)Field(portableOptions, "Proxy") == proxy, "portable proxy roundtrips special characters");
+                Field(portableOptions, "Proxy", "");
+
             }
             using (var settings = Settings())
             {
@@ -372,11 +410,20 @@ internal static class UiV2Stage6Acceptance
             var silent = Path.Combine(folder, "Silent");
             Directory.CreateDirectory(silent);
             var download = (Task)Invoke(client, "DownloadSilentAsync", server.Url, silent,
-                Path.Combine(folder, "archive.txt"), opt,
+                opt,
                 (Action<string>)(line => Console.WriteLine("yt-dlp: " + line)),
                 CancellationToken.None);
             Pump(download, "silent yt-dlp local HTTP transfer");
             Check(Directory.GetFiles(silent, "*.mp4").Length == 1, "real silent download wrote MP4");
+            string firstFile = Directory.GetFiles(silent, "*.mp4")[0];
+            File.Delete(firstFile);
+            var repeatLog = new List<string>();
+            var repeat = (Task)Invoke(client, "DownloadSilentAsync", server.Url, silent, opt,
+                (Action<string>)(line => { lock (repeatLog) repeatLog.Add(line); }), CancellationToken.None);
+            Pump(repeat, "download same URL after deleting file");
+            Check(Directory.GetFiles(silent, "*.mp4").Length == 1, "same URL downloads again after file deletion");
+            Check(!File.Exists(Path.Combine(silent, "downloaded.txt")), "no download archive created");
+            Check(repeatLog.Any(line => line.Contains("[download]")), "normal yt-dlp download diagnostics remain visible");
             using (var main = NewForm("MainFormV2"))
             {
                 Show(main);
@@ -391,7 +438,38 @@ internal static class UiV2Stage6Acceptance
                 Field(item, "PlaylistItem", true);
                 Field(item, "Container", "MP4");
                 Invoke(main, "AddQueueItem", item);
-                Pump((Task)Invoke(main, "DownloadQueue"), "integrated queue local HTTP transfer");
+                Field(opt, "ConcurrentDownloads", 3);
+                server.AllowBody.Reset();
+                Task queueRun = (Task)Invoke(main, "DownloadQueue");
+                var later = new List<object>();
+                try
+                {
+                    for (int i = 0; i < 3; i++)
+                    {
+                        var added = New("DownloadQueueItem");
+                        Field(added, "Title", "Later arrival " + i);
+                        Field(added, "Url", server.Url);
+                        Field(added, "OutputFolder", Path.Combine(folder, "Later" + i));
+                        Field(added, "Status", "等待中");
+                        Field(added, "PlaylistItem", true);
+                        Field(added, "Container", "MP4");
+                        Invoke(main, "AddQueueItem", added);
+                        later.Add(added);
+                    }
+                    var deadline = DateTime.UtcNow.AddSeconds(15);
+                    while (DateTime.UtcNow < deadline &&
+                        later.Count(x => (string)Field(x, "Status") == "下载中") < 2)
+                    { Application.DoEvents(); Thread.Sleep(25); }
+                    Check((string)Field(item, "Status") == "下载中" &&
+                        later.Count(x => (string)Field(x, "Status") == "下载中") == 2,
+                        "later arrivals fill two idle slots before initial transfer completes");
+                    Check((string)Field(later[2], "Status") == "等待中",
+                        "fourth item respects concurrency limit of three");
+                }
+                finally { server.AllowBody.Set(); }
+                Pump(queueRun, "integrated dynamic queue local HTTP transfer");
+                Check(later.All(x => (string)Field(x, "Status") == "已完成"),
+                    "all later arrivals complete in same queue run");
                 Check((string)Field(item, "Status") == "已完成",
                     "actual integrated download queue finishes");
                 Check(Directory.GetFiles((string)Field(item, "OutputFolder"), "*.mp4").Length > 0,
@@ -425,6 +503,7 @@ internal static class UiV2Stage6Acceptance
         readonly Thread worker;
         readonly byte[] body;
         volatile bool stopping;
+        internal readonly ManualResetEventSlim AllowBody = new ManualResetEventSlim(true);
         internal string Url { get; private set; }
         internal LocalServer(byte[] bytes)
         {
@@ -453,13 +532,16 @@ internal static class UiV2Stage6Acceptance
                             "Content-Length: " + body.Length + "\r\nAccept-Ranges: bytes\r\nConnection: close\r\n\r\n");
                         stream.Write(h, 0, h.Length);
                         if (!head.StartsWith("HEAD ", StringComparison.OrdinalIgnoreCase))
+                        {
+                            AllowBody.Wait();
                             stream.Write(body, 0, body.Length);
+                        }
                         stream.Flush();
                     }
                 }
                 catch { if (!stopping) Thread.Sleep(30); }
             }
         }
-        public void Dispose() { stopping = true; listener.Stop(); worker.Join(1500); }
+        public void Dispose() { stopping = true; AllowBody.Set(); listener.Stop(); worker.Join(1500); }
     }
 }
