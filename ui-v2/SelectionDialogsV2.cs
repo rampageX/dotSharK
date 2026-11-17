@@ -263,63 +263,236 @@ namespace dotSharK
 
         internal PlaylistSelectionDialogV2(PlaylistInfo list, MediaInfo sampleMedia, string folder)
         {
-            playlist = list; sample = sampleMedia;
-            Text = "播放列表 · 选择视频并加入队列"; StartPosition = FormStartPosition.CenterParent; FormBorderStyle = FormBorderStyle.Sizable;
-            MinimumSize = new Size(900, 620); Size = new Size(1200, 760); BackColor = DarkPalette.Background; ForeColor = DarkPalette.Foreground;
-            Font = new Font("Microsoft YaHei UI", 9F); Icon = AppBranding.CreateIcon();
-            var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(20, 16, 20, 16), BackColor = DarkPalette.Background };
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 56)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
-            Controls.Add(root);
-            var heading = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, BackColor = DarkPalette.Background };
-            heading.RowStyles.Add(new RowStyle(SizeType.Absolute, 27)); heading.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            heading.Controls.Add(new Label { Text = String.IsNullOrWhiteSpace(list.Title) ? "播放列表" : list.Title, Dock = DockStyle.Fill, Font = new Font(Font, FontStyle.Bold), ForeColor = DarkPalette.Foreground, AutoEllipsis = true }, 0, 0);
-            heading.Controls.Add(new Label { Text = String.Format("已解析 {0} 个视频。统一质量设置会应用于所选视频；目标格式不可用时 yt-dlp 会自动回退。", list.Entries.Count), Dock = DockStyle.Fill, ForeColor = DarkPalette.Muted, AutoEllipsis = true }, 0, 1);
-            root.Controls.Add(heading, 0, 0);
-
-            var options = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 10, RowCount = 1, BackColor = DarkPalette.Background };
-            float[] widths = { 4, 8, 9, 23, 4, 15, 4, 12, 4, 17 }; foreach (float w in widths) options.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, w));
-            options.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            modeBox = MakeCombo(new object[] { "视频", "仅音频" });
-            modeBox.ShowFocusAccent = false;
-            modeBox.ClearSelectionOnFocus = true;
-            qualityBox = MakeCombo(Enumerable.Empty<object>()); qualityBox.Items.Add(new QualityProfile { Choice = null });
-            if (sampleMedia != null) foreach (var v in sampleMedia.VideoChoices) qualityBox.Items.Add(new QualityProfile { Choice = v });
-            qualityBox.SelectedIndex = qualityBox.Items.Count > 1 ? 1 : 0;
-            audioBox = MakeCombo(new object[] { "默认音轨" }); if (sampleMedia != null) foreach (var a in sampleMedia.AudioChoices) audioBox.Items.Add(a); audioBox.SelectedIndex = 0;
-            containerBox = MakeCombo(new object[] { "MKV", "MP4", "WebM" });
-            subtitleBox = MakeCombo(new object[] { "不下载字幕" }); if (sampleMedia != null) foreach (var sub in sampleMedia.Subtitles) subtitleBox.Items.Add(sub); subtitleBox.SelectedIndex = 0;
-            AddOptionLabel(options, 0, "下载"); AddOptionLabel(options, 2, "统一视频质量"); AddOptionLabel(options, 4, "音轨"); AddOptionLabel(options, 6, "容器"); AddOptionLabel(options, 8, "字幕");
-            options.Controls.Add(modeBox, 1, 0); options.Controls.Add(qualityBox, 3, 0); options.Controls.Add(audioBox, 5, 0); options.Controls.Add(containerBox, 7, 0); options.Controls.Add(subtitleBox, 9, 0);
-            modeBox.SelectedIndexChanged += (s, e) => { qualityBox.Enabled = modeBox.SelectedIndex == 0; };
-            var listActions = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, BackColor = DarkPalette.Background, Padding = Padding.Empty };
-            listActions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 78)); listActions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90)); listActions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            var all = new DarkButton { Text = "全选", Dock = DockStyle.Fill, Height = DarkPalette.ControlHeight, Margin = new Padding(0, 2, 4, 2) };
-            var none = new DarkButton { Text = "全不选", Dock = DockStyle.Fill, Height = DarkPalette.ControlHeight, Margin = new Padding(0, 2, 8, 2) };
-            all.Click += (s, e) => SetAll(true); none.Click += (s, e) => SetAll(false);
-            listActions.Controls.Add(all, 0, 0); listActions.Controls.Add(none, 1, 0);
-            listActions.Controls.Add(new Label { Text = "勾选要加入下载队列的视频", Dock = DockStyle.Fill, ForeColor = DarkPalette.Muted, TextAlign = ContentAlignment.MiddleLeft }, 2, 0);
-            root.Controls.Add(options, 0, 1); root.Controls.Add(listActions, 0, 2);
-
-            entriesGrid = SingleVideoDialogV2.MakeGrid(); entriesGrid.ReadOnly = false; entriesGrid.MultiSelect = true; entriesGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            var check = new DataGridViewCheckBoxColumn { HeaderText = "下载", FillWeight = 6, ReadOnly = false, TrueValue = true, FalseValue = false, FlatStyle = FlatStyle.Standard };
-            check.HeaderCell.Style.BackColor = DarkPalette.Surface; check.HeaderCell.Style.ForeColor = DarkPalette.Muted; check.HeaderCell.Style.SelectionBackColor = DarkPalette.Surface; check.HeaderCell.Style.SelectionForeColor = DarkPalette.Muted;
-            entriesGrid.Columns.Add(check);
-            entriesGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "序号", FillWeight = 8, ReadOnly = true });
-            entriesGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "视频标题", FillWeight = 68, ReadOnly = true });
-            entriesGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "时长", FillWeight = 10, ReadOnly = true });
-            entriesGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "状态", FillWeight = 8, ReadOnly = true });
-            foreach (var entry in list.Entries)
+            playlist = list;
+            sample = sampleMedia;
+            SuspendLayout();
+            try
             {
-                string duration = entry.Duration > 0 ? TimeSpan.FromSeconds(entry.Duration).ToString(entry.Duration >= 3600 ? @"h\:mm\:ss" : @"mm\:ss") : "—";
-                int row = entriesGrid.Rows.Add(true, entry.Index, entry.Title, duration, "待加入"); entriesGrid.Rows[row].Tag = entry;
-            }
-            root.Controls.Add(entriesGrid, 0, 3);
+                Text = "播放列表 · 选择视频并加入队列";
+                StartPosition = FormStartPosition.CenterParent;
+                FormBorderStyle = FormBorderStyle.Sizable;
+                MinimumSize = Theme.PlaylistMinimumSize;
+                Size = new Size(1200, 760);
+                BackColor = Theme.Window; ForeColor = Theme.PrimaryText;
+                Font = Theme.BodyFont;
+                Icon = AppBranding.CreateIcon();
 
-            var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, BackColor = DarkPalette.Background, Padding = new Padding(0, 8, 0, 0) };
-            var add = new DarkButton { Text = "加入队列", Primary = true, Width = 120, Height = DarkPalette.ControlHeight };
-            var cancel = new DarkButton { Text = "取消", Width = 100, Height = DarkPalette.ControlHeight };
-            add.Click += (s, e) => BuildQueue(folder); cancel.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
-            buttons.Controls.Add(add); buttons.Controls.Add(cancel); root.Controls.Add(buttons, 0, 4); AcceptButton = add; CancelButton = cancel; ActiveControl = entriesGrid;
+                var root = new TableLayoutPanel
+                {
+                    Name = "layoutPlaylistRoot", Dock = DockStyle.Fill,
+                    ColumnCount = 1, RowCount = 9,
+                    Margin = Padding.Empty, Padding = new Padding(Theme.Space24),
+                    BackColor = Theme.Window
+                };
+                root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute,
+                    Theme.ControlHeight + Theme.Space24 * 2));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space16));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space12));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space16));
+                root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space16));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute,
+                    Theme.ActionHeight + Theme.Space16 * 2 + Theme.BorderWidth));
+                Controls.Add(root);
+
+                var heading = new TableLayoutPanel
+                {
+                    Name = "layoutPlaylistTitle", Dock = DockStyle.Fill,
+                    ColumnCount = 1, RowCount = 2, Margin = Padding.Empty,
+                    Padding = Padding.Empty, BackColor = Theme.Window
+                };
+                heading.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight));
+                heading.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+                heading.Controls.Add(new Label
+                {
+                    Name = "lblPlaylistTitle",
+                    Text = String.IsNullOrWhiteSpace(list.Title) ? "播放列表" : list.Title,
+                    Dock = DockStyle.Fill, Font = Theme.HeadingFont,
+                    ForeColor = Theme.PrimaryText, AutoEllipsis = true,
+                    TextAlign = ContentAlignment.MiddleLeft, Margin = Padding.Empty
+                }, 0, 0);
+                heading.Controls.Add(new Label
+                {
+                    Name = "lblPlaylistDescription",
+                    Text = String.Format("已解析 {0} 个视频。统一质量设置会应用于所选视频；目标格式不可用时 yt-dlp 会自动回退。", list.Entries.Count),
+                    Dock = DockStyle.Fill, Font = Theme.SmallFont,
+                    ForeColor = Theme.SecondaryText,
+                    TextAlign = ContentAlignment.MiddleLeft, Margin = Padding.Empty
+                }, 0, 1);
+                root.Controls.Add(heading, 0, 0);
+
+                modeBox = MakeCombo(new object[] { "视频", "仅音频" });
+                modeBox.Name = "cboPlaylistMode";
+                qualityBox = MakeCombo(Enumerable.Empty<object>());
+                qualityBox.Name = "cboPlaylistQuality";
+                qualityBox.Items.Add(new QualityProfile { Choice = null });
+                if (sampleMedia != null)
+                    foreach (var v in sampleMedia.VideoChoices)
+                        qualityBox.Items.Add(new QualityProfile { Choice = v });
+                qualityBox.SelectedIndex = qualityBox.Items.Count > 1 ? 1 : 0;
+                audioBox = MakeCombo(new object[] { "默认音轨" });
+                audioBox.Name = "cboPlaylistAudio";
+                if (sampleMedia != null)
+                    foreach (var track in sampleMedia.AudioChoices) audioBox.Items.Add(track);
+                audioBox.SelectedIndex = 0;
+                containerBox = MakeCombo(new object[] { "MKV", "MP4", "WebM" });
+                containerBox.Name = "cboPlaylistContainer";
+                subtitleBox = MakeCombo(new object[] { "不下载字幕" });
+                subtitleBox.Name = "cboPlaylistSubtitle";
+                if (sampleMedia != null)
+                    foreach (var sub in sampleMedia.Subtitles) subtitleBox.Items.Add(sub);
+                subtitleBox.SelectedIndex = 0;
+
+                // Five groups with weights 1:2:1:1:1, four 16px gutters.
+                var options = new TableLayoutPanel
+                {
+                    Name = "layoutPlaylistFilters", Dock = DockStyle.Fill,
+                    ColumnCount = 9, RowCount = 1,
+                    Margin = Padding.Empty, Padding = Padding.Empty,
+                    BackColor = Theme.Window
+                };
+                float baseUnit = 100f / 6f;
+                for (int i = 0; i < 5; i++)
+                {
+                    options.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,
+                        i == 1 ? baseUnit * 2 : baseUnit));
+                    if (i < 4)
+                        options.ColumnStyles.Add(new ColumnStyle(
+                            SizeType.Absolute, Theme.Space16));
+                }
+                options.Controls.Add(SingleVideoDialogV2.FilterGroup("下载", modeBox,
+                    Theme.Space12 * 3), 0, 0);
+                options.Controls.Add(SingleVideoDialogV2.FilterGroup("统一视频质量", qualityBox,
+                    Theme.Space24 * 4), 2, 0);
+                options.Controls.Add(SingleVideoDialogV2.FilterGroup("音轨", audioBox,
+                    Theme.Space12 * 3), 4, 0);
+                options.Controls.Add(SingleVideoDialogV2.FilterGroup("容器", containerBox,
+                    Theme.Space12 * 3), 6, 0);
+                options.Controls.Add(SingleVideoDialogV2.FilterGroup("字幕", subtitleBox,
+                    Theme.Space12 * 3), 8, 0);
+                root.Controls.Add(options, 0, 2);
+                modeBox.SelectedIndexChanged += (s, e) =>
+                    qualityBox.Enabled = modeBox.SelectedIndex == 0;
+
+                var actions = new TableLayoutPanel
+                {
+                    Name = "layoutPlaylistActions", Dock = DockStyle.Fill,
+                    ColumnCount = 5, RowCount = 1,
+                    BackColor = Theme.Window, Margin = Padding.Empty,
+                    Padding = Padding.Empty
+                };
+                actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.BrowseButtonWidth));
+                actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.Space8));
+                actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.BrowseButtonWidth));
+                actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.Space16));
+                actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+                var all = new SecondaryButton
+                {
+                    Name = "btnSelectAll", Text = "全选", Dock = DockStyle.Fill,
+                    Margin = Padding.Empty
+                };
+                var none = new SecondaryButton
+                {
+                    Name = "btnSelectNone", Text = "全不选", Dock = DockStyle.Fill,
+                    Margin = Padding.Empty
+                };
+                all.Click += (s, e) => SetAll(true);
+                none.Click += (s, e) => SetAll(false);
+                actions.Controls.Add(all, 0, 0);
+                actions.Controls.Add(none, 2, 0);
+                actions.Controls.Add(new Label
+                {
+                    Text = "勾选要加入下载队列的视频",
+                    Font = Theme.SmallFont, ForeColor = Theme.SecondaryText,
+                    Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft,
+                    Margin = Padding.Empty
+                }, 4, 0);
+                root.Controls.Add(actions, 0, 4);
+
+                entriesGrid = SingleVideoDialogV2.MakeGrid();
+                entriesGrid.Name = "gridPlaylistEntries";
+                entriesGrid.ReadOnly = false;
+                entriesGrid.MultiSelect = true;
+                entriesGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+                var check = new DataGridViewCheckBoxColumn
+                {
+                    Name = "checked", HeaderText = "下载",
+                    Width = Theme.Space16 * 4,
+                    ReadOnly = false, TrueValue = true, FalseValue = false,
+                    FlatStyle = FlatStyle.Flat,
+                    AutoSizeMode = DataGridViewAutoSizeColumnMode.None
+                };
+                entriesGrid.Columns.Add(check);
+                entriesGrid.Columns.Add(new DataGridViewTextBoxColumn
+                {
+                    Name = "order", HeaderText = "序号", Width = Theme.Space16 * 4,
+                    ReadOnly = true, AutoSizeMode = DataGridViewAutoSizeColumnMode.None
+                });
+                entriesGrid.Columns.Add(new DataGridViewTextBoxColumn
+                {
+                    Name = "title", HeaderText = "视频标题", ReadOnly = true,
+                    MinimumWidth = Theme.Space24 * 4,
+                    AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
+                });
+                entriesGrid.Columns.Add(new DataGridViewTextBoxColumn
+                {
+                    Name = "duration", HeaderText = "时长",
+                    Width = Theme.Space24 * 4, ReadOnly = true,
+                    AutoSizeMode = DataGridViewAutoSizeColumnMode.None
+                });
+                entriesGrid.Columns.Add(new DataGridViewTextBoxColumn
+                {
+                    Name = "status", HeaderText = "状态",
+                    Width = Theme.Space24 * 4, ReadOnly = true,
+                    AutoSizeMode = DataGridViewAutoSizeColumnMode.None
+                });
+                foreach (var entry in list.Entries)
+                {
+                    string duration = entry.Duration > 0
+                        ? TimeSpan.FromSeconds(entry.Duration).ToString(
+                            entry.Duration >= 3600 ? @"h\:mm\:ss" : @"mm\:ss")
+                        : "—";
+                    int row = entriesGrid.Rows.Add(true, entry.Index, entry.Title,
+                        duration, "待加入");
+                    entriesGrid.Rows[row].Tag = entry;
+                }
+                // Space toggles the checkbox from any cell of the current row;
+                // when the checkbox itself owns focus, its native handler acts.
+                entriesGrid.KeyDown += (s, e) =>
+                {
+                    if (e.KeyCode != Keys.Space || entriesGrid.CurrentCell == null
+                        || entriesGrid.CurrentCell.ColumnIndex == 0) return;
+                    int i = entriesGrid.CurrentCell.RowIndex;
+                    if (i < 0) return;
+                    var cell = entriesGrid.Rows[i].Cells[0];
+                    cell.Value = !Convert.ToBoolean(cell.Value);
+                    entriesGrid.InvalidateRow(i);
+                    e.Handled = true;
+                    e.SuppressKeyPress = true;
+                };
+                root.Controls.Add(entriesGrid, 0, 6);
+
+                var add = new PrimaryButton
+                {
+                    Name = "btnAddToQueue", Text = "加入队列", Dock = DockStyle.Fill,
+                    Margin = Padding.Empty
+                };
+                var cancel = new SecondaryButton
+                {
+                    Name = "btnCancel", Text = "取消", Dock = DockStyle.Fill,
+                    Margin = Padding.Empty, DialogResult = DialogResult.Cancel
+                };
+                add.Click += (s, e) => BuildQueue(folder);
+                cancel.Click += (s, e) =>
+                    { DialogResult = DialogResult.Cancel; Close(); };
+                root.Controls.Add(SingleVideoDialogV2.Footer(cancel, add), 0, 8);
+                AssignDialogButtons(add, cancel);
+                ActiveControl = entriesGrid;
+            }
+            finally { ResumeLayout(true); }
         }
 
         private void BuildQueue(string folder)
@@ -350,9 +523,7 @@ namespace dotSharK
         private void SetAll(bool value) { foreach (DataGridViewRow row in entriesGrid.Rows) row.Cells[0].Value = value; }
         private static V2Combo MakeCombo(IEnumerable<object> values)
         {
-            var combo = new V2Combo { Dock = DockStyle.Fill, Height = DarkPalette.ControlHeight, Margin = new Padding(0, 0, 8, 0) };
-            combo.Items.AddRange(values.ToArray()); combo.SelectedIndex = combo.Items.Count == 0 ? -1 : 0; return combo;
+            return SingleVideoDialogV2.MakeCombo(values);
         }
-        private static void AddOptionLabel(TableLayoutPanel row, int col, string text) { row.Controls.Add(new Label { Text = text, Dock = DockStyle.Fill, ForeColor = DarkPalette.Muted, TextAlign = ContentAlignment.MiddleLeft, Margin = new Padding(0, 0, 4, 0), AutoEllipsis = true }, col, 0); }
     }
 }
