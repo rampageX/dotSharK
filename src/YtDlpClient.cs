@@ -506,29 +506,97 @@ namespace dotSharK
             args.Add(url);
         }
 
+        // yt-dlp can be distributed with a native Windows launcher which
+        // writes CP936/GB18030 bytes despite PYTHONIOENCODING. Decode stdout
+        // and stderr from raw bytes, not DataReceived's fixed UTF-8 decoder:
+        // a lossy decoder would permanently replace Chinese chars with U+FFFD.
+        private static readonly Encoding StrictUtf8 = new UTF8Encoding(false, true);
+        private static readonly Encoding WindowsChinese =
+            Encoding.GetEncoding(54936, EncoderFallback.ExceptionFallback,
+                DecoderFallback.ExceptionFallback);
+
+        internal static string DecodeToolOutput(byte[] bytes)
+        {
+            if (bytes == null || bytes.Length == 0) return "";
+            string text;
+            try { text = StrictUtf8.GetString(bytes); }
+            catch (DecoderFallbackException)
+            {
+                try { text = WindowsChinese.GetString(bytes); }
+                catch (DecoderFallbackException) { text = Encoding.Default.GetString(bytes); }
+            }
+            if (text.Length > 0 && text[0] == '\uFEFF') text = text.Substring(1);
+            // Strip colored aria2c progress escape sequences from log display.
+            return Regex.Replace(text, @"\x1B\[[0-9;]*[ -/]*[@-~]", "");
+        }
+
+        private static async Task<string> ReadCaptureBytesAsync(Stream stream)
+        {
+            using (var memory = new MemoryStream())
+            {
+                await stream.CopyToAsync(memory);
+                return DecodeToolOutput(memory.ToArray());
+            }
+        }
+
+        private static async Task ReadOutputLinesAsync(Stream stream, Action<string> onLine)
+        {
+            var bytes = new byte[8192];
+            using (var line = new MemoryStream())
+            {
+                Action emit = () =>
+                {
+                    if (line.Length == 0) return;
+                    string value = DecodeToolOutput(line.ToArray());
+                    line.SetLength(0);
+                    if (value.Length != 0 && onLine != null) onLine(value);
+                };
+                int n;
+                while ((n = await stream.ReadAsync(bytes, 0, bytes.Length)) > 0)
+                {
+                    for (int i = 0; i < n; i++)
+                    {
+                        // Handle both yt-dlp's newline progress and aria2c's CR.
+                        if (bytes[i] == 10 || bytes[i] == 13) emit();
+                        else line.WriteByte(bytes[i]);
+                        // Prevent unbounded growth if a child emits no newlines.
+                        if (line.Length >= 1024 * 1024) emit();
+                    }
+                }
+                emit();
+            }
+        }
+
         private async Task<ProcessResult> RunCaptureAsync(List<string> args)
         {
             using (var p = Start(args))
             {
-                Task<string> stdout = p.StandardOutput.ReadToEndAsync(), stderr = p.StandardError.ReadToEndAsync();
+                Task<string> stdout = ReadCaptureBytesAsync(p.StandardOutput.BaseStream);
+                Task<string> stderr = ReadCaptureBytesAsync(p.StandardError.BaseStream);
                 await Task.Run(() => p.WaitForExit());
-                return new ProcessResult { ExitCode = p.ExitCode, Stdout = await stdout, Stderr = await stderr };
+                return new ProcessResult
+                {
+                    ExitCode = p.ExitCode, Stdout = await stdout, Stderr = await stderr
+                };
             }
         }
 
-        private async Task<ProcessResult> RunStreamingAsync(List<string> args, Action<string> output, CancellationToken cancellationToken)
+        private async Task<ProcessResult> RunStreamingAsync(List<string> args, Action<string> output,
+            CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             using (var p = Start(args))
             {
                 var error = new StringBuilder();
-                p.OutputDataReceived += (s, e) => { if (e.Data != null && output != null) output(e.Data); };
-                p.ErrorDataReceived += (s, e) => { if (e.Data != null) lock (error) error.AppendLine(e.Data); };
-                using (cancellationToken.Register(() => Task.Run(() => KillProcessTree(p))))
+                Task outRead = ReadOutputLinesAsync(p.StandardOutput.BaseStream, output);
+                Task errRead = ReadOutputLinesAsync(p.StandardError.BaseStream, line =>
                 {
-                    p.BeginOutputReadLine(); p.BeginErrorReadLine();
+                    lock (error) error.AppendLine(line);
+                    if (output != null) output(line);
+                });
+                using (cancellationToken.Register(() => Task.Run(() => KillProcessTree(p))))
                     await Task.Run(() => p.WaitForExit());
-                }
+                await Task.WhenAll(outRead, errRead);
                 cancellationToken.ThrowIfCancellationRequested();
                 return new ProcessResult { ExitCode = p.ExitCode, Stderr = error.ToString() };
             }
