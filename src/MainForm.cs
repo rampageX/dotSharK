@@ -47,8 +47,8 @@ namespace dotSharK
 
         private void BuildUi()
         {
-            var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(22, 16, 22, 18), BackColor = bg };
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 151)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 29));
+            var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(22, 16, 22, 11), BackColor = bg };
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 151)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 35));
             Controls.Add(root);
 
             var brand = new Panel { Dock = DockStyle.Fill };
@@ -122,10 +122,10 @@ namespace dotSharK
             NativeDarkTheme.ApplyOnHandleCreated(logBox, "DarkMode_Explorer"); NativeDarkTheme.ApplyScrollBarsOnHandleCreated(logBox, "DarkMode_Explorer"); logFrame.Controls.Add(logBox);
             lower.Controls.Add(logFrame, 0, 1); root.Controls.Add(lower, 0, 3);
 
-            var footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, BackColor = bg, Padding = Padding.Empty };
+            var footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, BackColor = bg, Padding = Padding.Empty, Margin = Padding.Empty };
             footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 176)); footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 136));
             stateLabel = new Label { Text = "就绪", Dock = DockStyle.Fill, ForeColor = muted, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
-            progress = new DarkProgressBar { Height = 8, Anchor = AnchorStyles.Left | AnchorStyles.Right, Visible = false, Margin = new Padding(4, 0, 16, 0) };
+            progress = new DarkProgressBar { Height = 8, Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom, Visible = false, Margin = new Padding(4, 0, 16, 8) };
             stateLabel.Height = DarkPalette.ControlHeight; stateLabel.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom; stateLabel.Margin = Padding.Empty;
             downloadButton = AccentButton("开始队列"); downloadButton.Height = DarkPalette.ControlHeight; downloadButton.Dock = DockStyle.None; downloadButton.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom; downloadButton.Margin = Padding.Empty; downloadButton.Enabled = false;
             downloadButton.Click += async (s, e) => { if (downloadRunning) StopQueue(); else await DownloadQueue(); };
