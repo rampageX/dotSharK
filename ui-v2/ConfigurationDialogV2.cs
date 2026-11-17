@@ -185,9 +185,17 @@ namespace dotSharK
         {
             table.RowStyles.Add(new RowStyle(SizeType.Absolute,
                 Theme.ControlHeight + Theme.Space12));
-            var body = Row(Fixed(Theme.LabelColumnWidth, Label(text)), Fill(field));
-            table.Controls.Add(SpacedRow(body), 0, index);
-            table.SetColumnSpan(table.GetControlFromPosition(0, index), 2);
+            // Dock.Top fixes the control at 32px. The unoccupied last 12px
+            // is the row gap. Avoid fourth-level nested tables: WinForms'
+            // DrawToBitmap otherwise skips some owner-painted descendants.
+            var label = Label(text);
+            label.Dock = DockStyle.Top;
+            label.Height = Theme.ControlHeight;
+            table.Controls.Add(label, 0, index);
+            field.Dock = DockStyle.Top;
+            field.Height = Theme.ControlHeight;
+            field.Margin = Padding.Empty;
+            table.Controls.Add(field, 1, index);
         }
         private sealed class RowPart
         {
