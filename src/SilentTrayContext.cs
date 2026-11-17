@@ -2,40 +2,89 @@ using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace dotSharK
 {
-    // One application, one MainForm, one download queue, one tray icon.
-    // The browser merely drops requests into the inbox, which this UI thread drains.
+    // One WinForms message loop / MainForm / tray icon. In particular, never
+    // change ShowInTaskbar after the handle is created: WinForms recreates
+    // top-level handles in response, invalidating queued UI callbacks.
     internal sealed class SilentTrayContext : ApplicationContext
     {
+        private const uint AW_HIDE = 0x00010000;
+        private const uint AW_BLEND = 0x00080000;
+        private const int SW_SHOW = 5;
+        private const int SW_RESTORE = 9;
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool AnimateWindow(IntPtr hWnd, uint time, uint flags);
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool ShowWindow(IntPtr hWnd, int command);
+        [DllImport("user32.dll")]
+        private static extern bool IsWindow(IntPtr hWnd);
+        [DllImport("user32.dll")]
+        private static extern bool IsWindowVisible(IntPtr hWnd);
+        [DllImport("user32.dll")]
+        private static extern bool IsIconic(IntPtr hWnd);
+        [DllImport("user32.dll")]
+        private static extern bool BringWindowToTop(IntPtr hWnd);
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetForegroundWindow();
+
         private readonly NotifyIcon notification;
         private readonly Icon trayIcon;
         private readonly ContextMenuStrip menu;
         private readonly System.Windows.Forms.Timer refreshTimer;
         private readonly MainForm mainWindow;
         private bool exiting;
-        private FormWindowState mainRestoreState = FormWindowState.Normal;
+        private bool hiding;
+        private bool checkRestore;
+        private FormWindowState mainRestoreState;
+
+        private static readonly string UiLog = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "dotSharK", "tray-ui.log");
 
         internal SilentTrayContext(bool showMain)
         {
             trayIcon = AppBranding.CreateIcon();
             mainWindow = new MainForm();
-            // Ensure BeginInvoke and progress updates work even before Show().
-            var handle = mainWindow.Handle;
+            mainRestoreState = mainWindow.WindowState == FormWindowState.Maximized
+                ? FormWindowState.Maximized : FormWindowState.Normal;
+
+            mainWindow.HandleCreated += (s, e) => TraceState("HandleCreated");
+            mainWindow.HandleDestroyed += (s, e) => TraceState("HandleDestroyed");
+            mainWindow.TrayMinimizeRequested += (s, e) => HideMainWindow("SC_MINIMIZE");
             mainWindow.FormClosing += OnMainWindowClosing;
             mainWindow.Resize += (s, e) =>
             {
-                if (mainWindow.IsDisposed || exiting) return;
+                if (mainWindow.IsDisposed || exiting || hiding) return;
                 if (mainWindow.WindowState == FormWindowState.Minimized)
                 {
-                    mainWindow.ShowInTaskbar = false;
-                    mainWindow.Hide();
+                    // Fallback for programmatic WindowState changes and Win+M.
+                    // Native minimize already animates; hide after the message
+                    // finishes, never toggle ShowInTaskbar or recreate the HWND.
+                    if (mainWindow.IsHandleCreated)
+                        mainWindow.BeginInvoke((Action)(() =>
+                        {
+                            if (!exiting && !hiding && !mainWindow.IsDisposed &&
+                                mainWindow.Visible && mainWindow.WindowState == FormWindowState.Minimized)
+                            {
+                                TraceState("Native minimize fallback");
+                                mainWindow.Hide();
+                            }
+                        }));
                 }
                 else mainRestoreState = mainWindow.WindowState;
             };
+
+            // Keep a stable HWND even when the first launch comes from a
+            // browser and the main window starts out hidden.
+            var hwnd = mainWindow.Handle;
 
             menu = new ContextMenuStrip
             {
@@ -72,9 +121,15 @@ namespace dotSharK
                 if (exiting) return;
                 ProcessIncomingJobs();
                 if (SilentDownloadBridge.ConsumeShowMainRequest()) OpenMainWindow();
+                if (checkRestore)
+                {
+                    checkRestore = false;
+                    CheckRestoreVisibility();
+                }
                 UpdateTooltip();
             };
             refreshTimer.Start();
+            TraceState("Tray ready");
             if (showMain) OpenMainWindow();
         }
 
@@ -88,19 +143,145 @@ namespace dotSharK
         {
             if (exiting || e.CloseReason != CloseReason.UserClosing) return;
             e.Cancel = true;
-            mainWindow.ShowInTaskbar = false;
-            mainWindow.Hide();
+            HideMainWindow("SC_CLOSE");
+        }
+
+        private void HideMainWindow(string reason)
+        {
+            if (exiting || hiding || mainWindow.IsDisposed || !mainWindow.Visible) return;
+            hiding = true;
+            try
+            {
+                if (mainWindow.WindowState != FormWindowState.Minimized)
+                    mainRestoreState = mainWindow.WindowState;
+                TraceState("Hide requested " + reason);
+
+                // The OS owns this 150-ms fade; we do not move the form,
+                // resize it, repaint it twice or change its taskbar style.
+                // AW_HIDE can fail in noninteractive sessions and with reduced
+                // motion; Hide() always remains the authoritative transition.
+                if (mainWindow.IsHandleCreated && mainWindow.WindowState != FormWindowState.Minimized)
+                {
+                    try { AnimateWindow(mainWindow.Handle, 150, AW_HIDE | AW_BLEND); }
+                    catch (Exception ex) { TraceState("AnimateWindow failed " + ex.GetType().Name); }
+                }
+                mainWindow.Hide();
+                checkRestore = false;
+                TraceState("Hidden in tray");
+            }
+            finally { hiding = false; }
         }
 
         private void OpenMainWindow()
         {
             if (exiting || mainWindow.IsDisposed) return;
-            mainWindow.ShowInTaskbar = true;
-            if (mainWindow.WindowState == FormWindowState.Minimized)
-                mainWindow.WindowState = mainRestoreState;
-            mainWindow.Show();
-            mainWindow.BringToFront();
-            mainWindow.Activate();
+            if (hiding)
+            {
+                // A fast double-click during the hide animation should not
+                // be lost. Defer the restore until the animation finishes.
+                if (mainWindow.IsHandleCreated)
+                    mainWindow.BeginInvoke((Action)(() => OpenMainWindow()));
+                return;
+            }
+            TraceState("Restore requested");
+            try
+            {
+                // Ensure any OS-mediated native minimize was undone before
+                // showing the window. Show() alone can leave an iconic HWND.
+                if (mainWindow.WindowState == FormWindowState.Minimized)
+                    mainWindow.WindowState = FormWindowState.Normal;
+                EnsureOnScreen();
+                if (!mainWindow.Visible) mainWindow.Show();
+
+                IntPtr hwnd = mainWindow.Handle;
+                if (IsIconic(hwnd))
+                    ShowWindow(hwnd, SW_RESTORE);
+                if (!IsWindowVisible(hwnd))
+                    ShowWindow(hwnd, SW_SHOW);
+                if (mainRestoreState == FormWindowState.Maximized &&
+                    mainWindow.WindowState != FormWindowState.Maximized)
+                    mainWindow.WindowState = FormWindowState.Maximized;
+
+                // The tray double-click is a user gesture and is eligible
+                // for foreground activation. No TopMost trick or handle reset.
+                BringWindowToTop(hwnd);
+                mainWindow.BringToFront();
+                mainWindow.Activate();
+                SetForegroundWindow(hwnd);
+                checkRestore = true;
+                TraceState("Restore attempted");
+            }
+            catch (Exception ex)
+            {
+                TraceState("Restore ERROR " + ex);
+            }
+        }
+
+        private void CheckRestoreVisibility()
+        {
+            if (exiting || mainWindow.IsDisposed) return;
+            IntPtr hwnd = mainWindow.IsHandleCreated ? mainWindow.Handle : IntPtr.Zero;
+            if (hwnd == IntPtr.Zero || !IsWindow(hwnd) || !mainWindow.Visible ||
+                !IsWindowVisible(hwnd) || IsIconic(hwnd))
+            {
+                TraceState("Restore verification failed; native repair");
+                // Repair an unexpectedly hidden or iconic Win32 window once.
+                // Do not force focus if the user has since switched apps.
+                if (mainWindow.WindowState == FormWindowState.Minimized)
+                    mainWindow.WindowState = FormWindowState.Normal;
+                if (!mainWindow.Visible) mainWindow.Show();
+                hwnd = mainWindow.Handle;
+                ShowWindow(hwnd, IsIconic(hwnd) ? SW_RESTORE : SW_SHOW);
+                TraceState("Restore repair completed");
+            }
+            else TraceState("Restore verification OK");
+        }
+
+        private void EnsureOnScreen()
+        {
+            if (mainWindow.WindowState != FormWindowState.Normal) return;
+            Rectangle bounds = mainWindow.Bounds;
+            foreach (Screen screen in Screen.AllScreens)
+            {
+                Rectangle overlap = Rectangle.Intersect(bounds, screen.WorkingArea);
+                if (overlap.Width >= 80 && overlap.Height >= 60) return;
+            }
+            Screen primary = Screen.PrimaryScreen;
+            if (primary == null) return;
+            Rectangle work = primary.WorkingArea;
+            int x = work.Left + Math.Max(0, (work.Width - bounds.Width) / 2);
+            int y = work.Top + Math.Max(0, (work.Height - bounds.Height) / 2);
+            mainWindow.Location = new Point(x, y);
+            TraceState("Recentered off-screen window");
+        }
+
+        private void TraceState(string action)
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(UiLog));
+                var info = new FileInfo(UiLog);
+                if (info.Exists && info.Length > 150 * 1024)
+                {
+                    string rotated = UiLog + ".old";
+                    if (File.Exists(rotated)) File.Delete(rotated);
+                    File.Move(UiLog, rotated);
+                }
+                IntPtr hwnd = mainWindow != null && mainWindow.IsHandleCreated
+                    ? mainWindow.Handle : IntPtr.Zero;
+                string line = String.Format(
+                    "{0:yyyy-MM-dd HH:mm:ss.fff} {1} | HWND={2} Win32Visible={3} IsIconic={4} Foreground={5} ManagedVisible={6} State={7} ShowInTaskbar={8} Bounds={9}",
+                    DateTime.Now, action, hwnd.ToInt64().ToString("X"),
+                    hwnd != IntPtr.Zero && IsWindowVisible(hwnd),
+                    hwnd != IntPtr.Zero && IsIconic(hwnd),
+                    GetForegroundWindow().ToInt64().ToString("X"),
+                    mainWindow != null && mainWindow.Visible,
+                    mainWindow != null ? mainWindow.WindowState.ToString() : "N/A",
+                    mainWindow != null && mainWindow.ShowInTaskbar,
+                    mainWindow != null ? mainWindow.Bounds.ToString() : "N/A");
+                File.AppendAllText(UiLog, line + Environment.NewLine);
+            }
+            catch { /* UI diagnostics must never block activation. */ }
         }
 
         private void UpdateTooltip()
@@ -134,6 +315,7 @@ namespace dotSharK
             exiting = true;
             exitItem.Enabled = false;
             refreshTimer.Stop();
+            TraceState("Exit requested");
             await mainWindow.CancelQueueForExitAsync();
             ExitThread();
         }
