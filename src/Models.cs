@@ -67,6 +67,7 @@ namespace dotSharK
         public MediaInfo Media;
         public bool AudioOnly, AutomaticSubtitle, PlaylistItem, BrowserSilent;
         public string BrowserJobPath;
+        public bool PauseRequested;
         public string OriginPageUrl;
         public VideoChoice Video;
         public AudioChoice Audio;
