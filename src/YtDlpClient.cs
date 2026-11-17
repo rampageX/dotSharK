@@ -40,6 +40,7 @@ namespace dotSharK
             var args = CommonArguments(options, false);
             args.AddRange(new[] { "--dump-single-json", "--no-warnings", "--no-playlist", "--skip-download", "--no-progress", url });
             ApplyCustomOverrides(args, options);
+            ApplyNoProxySite(args, options, url, false);
             ProcessResult result = await RunCaptureAsync(args);
             if (result.ExitCode != 0 || String.IsNullOrWhiteSpace(result.Stdout))
                 throw new InvalidOperationException(UsefulError(result.Stderr, result.ExitCode));
@@ -51,6 +52,7 @@ namespace dotSharK
             var args = CommonArguments(options, false);
             args.AddRange(new[] { "--dump-single-json", "--flat-playlist", "--no-warnings", "--skip-download", "--no-progress", url });
             ApplyCustomOverrides(args, options);
+            ApplyNoProxySite(args, options, url, false);
             ProcessResult result = await RunCaptureAsync(args);
             if (result.ExitCode != 0 || String.IsNullOrWhiteSpace(result.Stdout))
                 throw new InvalidOperationException(UsefulError(result.Stderr, result.ExitCode));
@@ -317,7 +319,7 @@ namespace dotSharK
                     @"^(?=.{1,253}$)[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+$") ||
                     host.Split('.').Any(x => x.StartsWith("-", StringComparison.Ordinal) ||
                                               x.EndsWith("-", StringComparison.Ordinal)))
-                    throw new ArgumentException("aria2c 站点必须填写域名（例如 youtube.com 或 *.youtube.com），不能包含 URL、端口或其它通配符：" + raw);
+                    throw new ArgumentException("站点规则必须填写域名（例如 youtube.com 或 *.youtube.com），不能包含 URL、端口或其它通配符：" + raw);
             }
         }
 
