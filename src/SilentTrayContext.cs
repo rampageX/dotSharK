@@ -184,6 +184,7 @@ namespace dotSharK
                 return;
             }
             TraceState("Restore requested");
+            FormWindowState desiredState = mainRestoreState;
             try
             {
                 // Ensure any OS-mediated native minimize was undone before
@@ -198,9 +199,10 @@ namespace dotSharK
                     ShowWindow(hwnd, SW_RESTORE);
                 if (!IsWindowVisible(hwnd))
                     ShowWindow(hwnd, SW_SHOW);
-                if (mainRestoreState == FormWindowState.Maximized &&
+                if (desiredState == FormWindowState.Maximized &&
                     mainWindow.WindowState != FormWindowState.Maximized)
                     mainWindow.WindowState = FormWindowState.Maximized;
+                mainRestoreState = desiredState;
 
                 // The tray double-click is a user gesture and is eligible
                 // for foreground activation. No TopMost trick or handle reset.
