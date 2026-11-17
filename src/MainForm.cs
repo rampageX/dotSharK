@@ -478,6 +478,24 @@ namespace dotSharK
         private void ReportDownloadLine(DownloadQueueItem item, ItemDownloadProgress state, string lineText)
         {
             if (item == null || state == null || String.IsNullOrEmpty(lineText)) return;
+            if (item.BrowserSilent && lineText.StartsWith("dotSharKTitle=", StringComparison.Ordinal))
+            {
+                string title = lineText.Substring("dotSharKTitle=".Length).Trim();
+                if (title.Length > 0 && IsHandleCreated && !IsDisposed)
+                {
+                    try
+                    {
+                        BeginInvoke((Action)(() =>
+                        {
+                            if (IsDisposed || !queueItems.Contains(item)) return;
+                            item.Title = title;
+                            UpdateQueueRow(item);
+                        }));
+                    }
+                    catch (InvalidOperationException) { }
+                }
+                return;
+            }
             var formatMatch = Regex.Match(lineText, @"Downloading\s+\d+\s+format\(s\):\s*(.+)$", RegexOptions.IgnoreCase);
             if (formatMatch.Success) state.StageCount = Math.Max(1, formatMatch.Groups[1].Value.Count(c => c == '+') + 1);
             var match = Regex.Match(lineText, @"(?:^|\s)(\d+(?:[.,]\d+)?)%\s+of\b", RegexOptions.IgnoreCase);
