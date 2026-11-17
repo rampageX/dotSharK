@@ -103,6 +103,7 @@ internal static class UiV2Stage6Acceptance
             CheckCompletedStorage();
             CheckSilentResolutionSelectors();
             CheckCommandLine();
+            CheckUnicodeFilePaths();
             CheckNativeHost();
             CheckDownloads(args[2], args[3], args[4]);
             CheckTray();
@@ -299,6 +300,42 @@ internal static class UiV2Stage6Acceptance
         Check((bool)Static("YtDlpClient", "MatchesAriaSite",
                 "https://www.youtube.com/watch?v=123", "youtube.com"), "aria2c subdomain routing preserved");
     }
+    static void CheckUnicodeFilePaths()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "dotSharK-Unicode-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            const string realName = "Color Burst HDR Dolby Vision™ 12K 60FPS [y9n6HkftavM].webm";
+            string actual = Path.Combine(directory, realName);
+            File.WriteAllBytes(actual, new byte[] { 1, 2, 3 });
+            string missingMark = Path.Combine(directory,
+                "Color Burst HDR Dolby Vision 12K 60FPS [y9n6HkftavM].webm");
+            Check((string)Static("CompletedFileResolver", "Resolve", actual, directory) == actual,
+                "exact Unicode output path remains unchanged");
+            Check((string)Static("CompletedFileResolver", "Resolve", missingMark, directory) == actual,
+                "legacy missing trademark sign recovers actual downloaded video by stable ID");
+            string missingId = Path.Combine(directory,
+                "Color Burst HDR Dolby Vision 12K 60FPS.webm");
+            string actualNoId = Path.Combine(directory, "Color Burst HDR Dolby Vision™ 12K 60FPS.webm");
+            File.WriteAllBytes(actualNoId, new byte[] { 1 });
+            Check((string)Static("CompletedFileResolver", "Resolve", missingId, directory) == actualNoId,
+                "legacy missing trademark without video ID resolves unique file name");
+            string notMatching = Path.Combine(directory, "completely unrelated video.webm");
+            Check(Static("CompletedFileResolver", "Resolve", notMatching, directory) == null,
+                "resolver refuses unrelated existing videos");
+            string titleJson = "dotSharKTitleJson=\\"Color Burst HDR Dolby Vision\\u2122 12K 60FPS\\"";
+            Check((string)Static("MainFormV2", "ParsePrintedMetadata", titleJson, "dotSharKTitleJson=") ==
+                "Color Burst HDR Dolby Vision™ 12K 60FPS", "escaped JSON title preserves trademark");
+            var escapedPath = new System.Web.Script.Serialization.JavaScriptSerializer().Serialize(actual)
+                .Replace("™", "\\u2122");
+            string decoded = (string)Static("MainFormV2", "ParsePrintedMetadata",
+                "dotSharKFileJson=" + escapedPath, "dotSharKFileJson=");
+            Check(decoded == actual, "yt-dlp JSON final filename roundtrips trademark and Windows path");
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+
     static void CheckNativeHost()
     {
         Check((bool)Static("SilentDownloadBridge", "IsNativeHostCall",

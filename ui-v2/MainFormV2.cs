@@ -656,7 +656,7 @@ namespace dotSharK
                                 };
                                 Action<string> output = lineText =>
                                 {
-                                    if (!lineText.StartsWith("dotSharKFile=", StringComparison.Ordinal))
+                                    if (!lineText.StartsWith("dotSharKFileJson=", StringComparison.Ordinal))
                                         AppendLog("[" + item.Title + "] " + lineText);
                                     ReportDownloadLine(item, itemProgress, lineText);
                                 };
@@ -681,7 +681,12 @@ namespace dotSharK
                             catch (Exception ex) { item.Status = "失败"; AppendLog("[失败] " + item.Title + " · " + ex.Message); }
                             finally { itemCancellation.Remove(item); }
                             UpdateQueueRow(item);
-                            if (item.Status == "已完成") PersistCompletedQueue();
+                            if (item.Status == "已完成")
+                            {
+                                string actual = CompletedFileResolver.Resolve(item.FilePath, item.OutputFolder);
+                                if (!String.IsNullOrWhiteSpace(actual)) item.FilePath = actual;
+                                PersistCompletedQueue();
+                            }
                             if (item.BrowserSilent && (item.Status == "已完成" || item.Status == "失败"))
                                 SilentDownloadBridge.CompleteJob(item.BrowserJobPath);
                         }
@@ -738,7 +743,13 @@ namespace dotSharK
         private void OpenCompletedItem(DownloadQueueItem item, bool folder)
         {
             if (item == null || item.Status != "已完成") return;
-            string path = item.FilePath;
+            string path = CompletedFileResolver.Resolve(item.FilePath, item.OutputFolder);
+            if (!String.IsNullOrWhiteSpace(path) &&
+                !String.Equals(path, item.FilePath, StringComparison.Ordinal))
+            {
+                item.FilePath = path;
+                PersistCompletedQueue();
+            }
             if (String.IsNullOrWhiteSpace(path))
             {
                 // Never guess which file to launch for legacy completed entries.
@@ -870,20 +881,40 @@ namespace dotSharK
                 && percent >= 0 && percent <= 100;
         }
 
+        // yt-dlp output template %(field)j encodes Unicode as JSON escapes
+        // before stdout text encoding. Never reconstruct paths from display titles.
+        internal static string ParsePrintedMetadata(string lineText, string prefix)
+        {
+            if (String.IsNullOrWhiteSpace(lineText) ||
+                !lineText.StartsWith(prefix, StringComparison.Ordinal)) return null;
+            string payload = lineText.Substring(prefix.Length).Trim();
+            if (payload.Length < 2 || payload[0] != '"') return null;
+            try { return new System.Web.Script.Serialization.JavaScriptSerializer().Deserialize<string>(payload); }
+            catch (ArgumentException) { return null; }
+            catch (InvalidOperationException) { return null; }
+        }
+
         private void ReportDownloadLine(DownloadQueueItem item, ItemDownloadProgress state, string lineText)
         {
             if (item == null || state == null || String.IsNullOrEmpty(lineText)) return;
-            if (lineText.StartsWith("dotSharKFile=", StringComparison.Ordinal))
+            if (lineText.StartsWith("dotSharKFileJson=", StringComparison.Ordinal))
             {
-                string filename = lineText.Substring("dotSharKFile=".Length).Trim();
-                if (Path.IsPathRooted(filename) && filename.IndexOfAny(Path.GetInvalidPathChars()) < 0)
-                    item.FilePath = filename;
+                string filename = ParsePrintedMetadata(lineText, "dotSharKFileJson=");
+                if (!String.IsNullOrWhiteSpace(filename))
+                {
+                    try
+                    {
+                        if (Path.IsPathRooted(filename) && filename.IndexOfAny(Path.GetInvalidPathChars()) < 0)
+                            item.FilePath = filename;
+                    }
+                    catch (ArgumentException) { }
+                }
                 return;
             }
-            if (item.BrowserSilent && lineText.StartsWith("dotSharKTitle=", StringComparison.Ordinal))
+            if (item.BrowserSilent && lineText.StartsWith("dotSharKTitleJson=", StringComparison.Ordinal))
             {
-                string title = lineText.Substring("dotSharKTitle=".Length).Trim();
-                if (title.Length > 0 && IsHandleCreated && !IsDisposed)
+                string title = ParsePrintedMetadata(lineText, "dotSharKTitleJson=");
+                if (!String.IsNullOrWhiteSpace(title) && IsHandleCreated && !IsDisposed)
                 {
                     item.Title = title;
                     try

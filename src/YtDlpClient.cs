@@ -145,7 +145,7 @@ namespace dotSharK
         {
             var args = CommonArguments(options, true);
             args.AddRange(new[] { "--no-playlist", "--newline", "--progress", "-P", folder, "-o", "%(title)s.%(ext)s",
-                "--print", "after_move:dotSharKFile=%(filepath)s" });
+                "--print", "after_move:dotSharKFileJson=%(filepath)j" });
             // If both tools are configured, PATH below lets ffmpeg and ffprobe live in
             // separate folders. With only ffmpeg configured, yt-dlp can find a sibling probe.
             if (!String.IsNullOrWhiteSpace(FfmpegPath) && String.IsNullOrWhiteSpace(FfprobePath)) { args.Add("--ffmpeg-location"); args.Add(FfmpegPath); }
@@ -188,8 +188,8 @@ namespace dotSharK
                 "--no-playlist", "--playlist-items", "1", "--newline", "--progress",
                 "-P", folder, "-o", "%(title)s [%(id)s].%(ext)s",
                 "--download-archive", archivePath,
-                "--print", "before_dl:dotSharKTitle=%(title)s",
-                "--print", "after_move:dotSharKFile=%(filepath)s",
+                "--print", "before_dl:dotSharKTitleJson=%(title)j",
+                "--print", "after_move:dotSharKFileJson=%(filepath)j",
                 "-f", SilentFormatSelector(options), "--format-sort-force",
                 "-S", "res,fps,hdr,vcodec,br"
             });
@@ -210,7 +210,7 @@ namespace dotSharK
             if (item == null || String.IsNullOrWhiteSpace(item.Url)) throw new InvalidOperationException("播放列表项目网址为空。");
             var args = CommonArguments(options, true);
             args.AddRange(new[] { "--no-playlist", "--newline", "--progress", "-P", item.OutputFolder, "-o", "%(title)s [%(id)s].%(ext)s",
-                "--print", "after_move:dotSharKFile=%(filepath)s" });
+                "--print", "after_move:dotSharKFileJson=%(filepath)j" });
             if (!String.IsNullOrWhiteSpace(FfmpegPath) && String.IsNullOrWhiteSpace(FfprobePath)) { args.Add("--ffmpeg-location"); args.Add(FfmpegPath); }
             args.Add("-f"); args.Add(PlaylistFormatSelector(item));
             if (!String.IsNullOrWhiteSpace(item.Container)) { args.Add("--merge-output-format"); args.Add(item.Container.ToLowerInvariant()); }
