@@ -31,7 +31,9 @@ namespace dotSharK.UiV2
         public const int NumericArrowHeight = 16;
         public const int IconButtonSize = 32;
         public const int LabelColumnWidth = 96;
-        public const int NumericWidth = 96;
+        public const int NumericWidth = 80;
+        public const int NumericArrowWidth = 24;
+        public const int FullNumericWidth = 96;
         public const int BrowseButtonWidth = 80;
         public const int FooterButtonWidth = 88;
         public const int AnalyzeButtonWidth = 96;
