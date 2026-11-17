@@ -152,24 +152,109 @@ namespace dotSharK
                     try { acquired = mutex.WaitOne(0); }
                     catch (AbandonedMutexException) { acquired = true; }
                     if (!acquired) return;
-                    RecoverInterruptedJobs();
-                    // Keep a small idle window for requests arriving while the last job is finishing.
-                    DateTime idleUntil = DateTime.UtcNow.AddSeconds(5);
-                    while (DateTime.UtcNow < idleUntil)
-                    {
-                        string job = Directory.GetFiles(Pending, "*.job")
-                            .OrderBy(path => File.GetCreationTimeUtc(path)).FirstOrDefault();
-                        if (job == null) { Thread.Sleep(250); continue; }
-                        idleUntil = DateTime.UtcNow.AddSeconds(5);
-                        string running = Path.Combine(Active, Path.GetFileName(job));
-                        try { File.Move(job, running); }
-                        catch (IOException) { continue; }
-                        ProcessJobAsync(running).GetAwaiter().GetResult();
-                        idleUntil = DateTime.UtcNow.AddSeconds(5);
-                    }
+
+                    // Own a persistent notification-area icon; no taskbar button or
+                    // unsolicited main window is created until the user opens one.
+                    System.Windows.Forms.Application.EnableVisualStyles();
+                    System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
+                    using (var tray = new SilentTrayContext())
+                        System.Windows.Forms.Application.Run(tray);
                 }
-                catch (Exception ex) { WriteLog("队列处理异常：" + ex); }
+                catch (Exception ex) { WriteLog("后台托盘异常：" + ex); }
                 finally { if (acquired) mutex.ReleaseMutex(); }
+            }
+        }
+
+        internal static void RunWorkerLoop(CancellationToken cancellationToken)
+        {
+            RecoverInterruptedJobs();
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
+                    string job = Directory.GetFiles(Pending, "*.job")
+                        .OrderBy(path => File.GetCreationTimeUtc(path)).FirstOrDefault();
+                    if (job == null)
+                    {
+                        cancellationToken.WaitHandle.WaitOne(350);
+                        continue;
+                    }
+                    string running = Path.Combine(Active, Path.GetFileName(job));
+                    try { File.Move(job, running); }
+                    catch (IOException) { continue; }
+                    ProcessJobAsync(running, cancellationToken).GetAwaiter().GetResult();
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { break; }
+                catch (Exception ex)
+                {
+                    WriteLog("队列处理异常：" + ex);
+                    cancellationToken.WaitHandle.WaitOne(500);
+                }
+            }
+        }
+
+        internal static int PendingCount
+        {
+            get
+            {
+                try { return Directory.Exists(Pending) ? Directory.GetFiles(Pending, "*.job").Length : 0; }
+                catch { return 0; }
+            }
+        }
+
+        internal static string ActiveUrl
+        {
+            get
+            {
+                try
+                {
+                    if (!Directory.Exists(Active)) return null;
+                    string file = Directory.GetFiles(Active, "*.job").FirstOrDefault();
+                    return file == null ? null : ValidatePageUrl(File.ReadAllText(file, Encoding.UTF8));
+                }
+                catch { return null; }
+            }
+        }
+
+        internal static string ReadRecentLog()
+        {
+            try
+            {
+                if (!File.Exists(LogPath)) return "";
+                using (var stream = new FileStream(LogPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                {
+                    // Cap UI log I/O even after thousands of downloads.
+                    int length = (int)Math.Min(32768L, stream.Length);
+                    if (length == 0) return "";
+                    stream.Seek(-length, SeekOrigin.End);
+                    byte[] bytes = new byte[length];
+                    int offset = 0;
+                    while (offset < length)
+                    {
+                        int read = stream.Read(bytes, offset, length - offset);
+                        if (read == 0) break;
+                        offset += read;
+                    }
+                    string raw = Encoding.UTF8.GetString(bytes, 0, offset);
+                    string[] lines = raw.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                    return String.Join(Environment.NewLine, lines.Skip(Math.Max(0, lines.Length - 70)));
+                }
+            }
+            catch { return ""; }
+        }
+
+        internal static string SilentFolder
+        {
+            get
+            {
+                try
+                {
+                    YtDlpOptions options;
+                    string folder, ytDlp, ffmpeg, ffprobe, deno;
+                    LoadConfiguration(out options, out folder, out ytDlp, out ffmpeg, out ffprobe, out deno);
+                    return folder;
+                }
+                catch { return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Downloads", "Silent"); }
             }
         }
 
@@ -183,9 +268,10 @@ namespace dotSharK
             }
         }
 
-        private static async Task ProcessJobAsync(string job)
+        private static async Task ProcessJobAsync(string job, CancellationToken cancellationToken)
         {
             string url = "";
+            bool interrupted = false;
             try
             {
                 url = ValidatePageUrl(File.ReadAllText(job, Encoding.UTF8));
@@ -199,11 +285,30 @@ namespace dotSharK
                 WriteLog("[开始] " + url);
                 var client = new YtDlpClient(ytDlp, ffmpeg, ffprobe, deno);
                 await client.DownloadSilentAsync(url, folder, ArchivePath, options,
-                    line => { if (!String.IsNullOrWhiteSpace(line)) WriteLog("[yt-dlp] " + line); });
+                    line => { if (!String.IsNullOrWhiteSpace(line)) WriteLog("[yt-dlp] " + line); },
+                    cancellationToken);
                 WriteLog("[完成] " + url);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                interrupted = true;
+                WriteLog("[中断，保留待续] " + url);
+            }
             catch (Exception ex) { WriteLog("[失败] " + url + " · " + ex.Message); }
-            finally { try { File.Delete(job); } catch { } }
+            finally
+            {
+                try
+                {
+                    if (interrupted)
+                    {
+                        string target = Path.Combine(Pending, Path.GetFileName(job));
+                        if (File.Exists(target)) File.Delete(job);
+                        else File.Move(job, target);
+                    }
+                    else File.Delete(job);
+                }
+                catch (Exception ex) { WriteLog("保存任务状态失败：" + ex.Message); }
+            }
         }
 
         private static void LoadConfiguration(out YtDlpOptions options, out string folder,
