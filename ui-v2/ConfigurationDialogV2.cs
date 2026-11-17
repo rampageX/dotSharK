@@ -616,9 +616,9 @@ namespace dotSharK
                 { profileStatus.Text = "代理地址格式不正确，请检查协议和端口。"; return; }
             }
             if (sourceBox.SelectedIndex == 1 && !String.IsNullOrWhiteSpace(cookieFileBox.Text) && !File.Exists(cookieFileBox.Text.Trim()))
-            { MessageBox.Show(this, "找不到指定的 Cookie 文件。", "dotSharK", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
+            { DarkMessageBox.Show(this, "找不到指定的 Cookie 文件。", "dotSharK", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
             if (sourceBox.SelectedIndex == 1 && String.IsNullOrWhiteSpace(cookieFileBox.Text))
-            { MessageBox.Show(this, "请指定 Netscape 格式的 Cookie 文件。", "dotSharK", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
+            { DarkMessageBox.Show(this, "请指定 Netscape 格式的 Cookie 文件。", "dotSharK", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
             var browser = browserBox.SelectedItem as BrowserOption;
             string geoProxy = geoProxyBox.Text.Trim();
             if (geoProxyEnabledBox.Checked && geoProxy.Length > 0 && !IsValidProxy(geoProxy))
@@ -637,7 +637,7 @@ namespace dotSharK
             }
             catch (ArgumentException ex)
             {
-                MessageBox.Show(this, ex.Message, "高级下载参数无效", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                DarkMessageBox.Show(this, ex.Message, "高级下载参数无效", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             Options.ConcurrentFragments = (int)fragmentsBox.Value; Options.ConcurrentDownloads = (int)downloadsBox.Value; Options.VideoQualityLimit = (int)qualityLimitBox.Value;
@@ -647,13 +647,13 @@ namespace dotSharK
                 silentFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Downloads", "Silent");
             if (!Path.IsPathRooted(silentFolder))
             {
-                MessageBox.Show(this, "静默下载目录需要填写完整的绝对路径。", "dotSharK", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                DarkMessageBox.Show(this, "静默下载目录需要填写完整的绝对路径。", "dotSharK", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             try { silentFolder = Path.GetFullPath(silentFolder); }
             catch (Exception)
             {
-                MessageBox.Show(this, "静默下载目录路径无效。", "dotSharK", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                DarkMessageBox.Show(this, "静默下载目录路径无效。", "dotSharK", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             Options.SilentDownloadFolder = silentFolder;
@@ -956,20 +956,40 @@ namespace dotSharK
             using (var dialog = new OpenFileDialog { Title = "选择 Netscape Cookie 文件", Filter = "Cookie 文件 (*.txt;*.cookies)|*.txt;*.cookies|所有文件 (*.*)|*.*", CheckFileExists = true })
                 if (dialog.ShowDialog(this) == DialogResult.OK) cookieFileBox.Text = dialog.FileName;
         }
-        private DarkComboBox StyledCombo(object[] items)
+        private V2Combo StyledCombo(object[] items)
         {
-            var combo = new DarkComboBox { Height = DarkPalette.ControlHeight, Margin = Padding.Empty };
-            combo.Items.AddRange(items); if (combo.Items.Count > 0) combo.SelectedIndex = 0; return combo;
+            var combo = new V2Combo
+            {
+                Height = Theme.ControlHeight, Font = Theme.BodyFont,
+                Margin = Padding.Empty
+            };
+            combo.Items.AddRange(items);
+            if (combo.Items.Count > 0) combo.SelectedIndex = 0;
+            return combo;
         }
-        private DarkTextBox StyledTextBox(string text) { return new DarkTextBox { Text = text ?? "", Font = Font, Multiline = false, AutoSize = false, Height = DarkPalette.ControlHeight, Margin = Padding.Empty }; }
-        private static void SetBottomField(Control control, bool stretch, int rightMargin)
+        private FlatTextBox StyledTextBox(string text)
         {
-            control.Dock = DockStyle.None;
-            control.Height = DarkPalette.ControlHeight;
-            control.Margin = new Padding(0, 0, rightMargin, 0);
-            control.Anchor = AnchorStyles.Left | AnchorStyles.Bottom | (stretch ? AnchorStyles.Right : AnchorStyles.None);
+            return new FlatTextBox
+            {
+                Text = text ?? "", Font = Theme.BodyFont,
+                Height = Theme.ControlHeight, Margin = Padding.Empty,
+                Dock = DockStyle.Fill
+            };
         }
-        private Label StyledLabel(string text) { return new Label { Text = text, ForeColor = fg, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true }; }
-        private Button StyledButton(string text, bool accent) { return new DarkButton { Text = text, Primary = accent, Font = Font, Height = DarkPalette.ControlHeight, MinimumSize = new Size(0, DarkPalette.ControlHeight) }; }
+        private Label StyledLabel(string text) { return Label(text); }
+        private Button StyledButton(string text, bool accent)
+        {
+            Button button = accent ? (Button)new PrimaryButton() : new SecondaryButton();
+            button.Text = text; button.Font = Theme.BodyFont;
+            button.Height = Theme.ControlHeight;
+            button.Margin = Padding.Empty;
+            button.MinimumSize = new Size(Theme.Space24, Theme.ControlHeight);
+            return button;
+        }
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) v2ToolTips.Dispose();
+            base.Dispose(disposing);
+        }
     }
 }
