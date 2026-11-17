@@ -43,37 +43,175 @@ namespace dotSharK
         public string Aria2cPath { get { return toolPaths[4].Text.Trim(); } }
         public YtDlpOptions Options { get; private set; }
 
-        public ConfigurationDialogV2(string ytDlp, string ffmpeg, string ffprobe, string deno, string aria2c, YtDlpOptions options)
+        public ConfigurationDialogV2(string ytDlp, string ffmpeg, string ffprobe,
+            string deno, string aria2c, YtDlpOptions options)
         {
             options = options ?? new YtDlpOptions();
-            Options = new YtDlpOptions { Proxy = options.Proxy, GeoVerificationProxy = options.GeoVerificationProxy, ConcurrentFragments = options.ConcurrentFragments, ConcurrentDownloads = options.ConcurrentDownloads, VideoQualityLimit = options.VideoQualityLimit, CookieMode = options.CookieMode,
-                CookieBrowser = options.CookieBrowser, CookieProfileRoot = options.CookieProfileRoot, CookieProfile = options.CookieProfile, CookieFile = options.CookieFile,
-                SilentDownloadFolder = options.SilentDownloadFolder,
+            Options = new YtDlpOptions
+            {
+                Proxy = options.Proxy, GeoVerificationProxy = options.GeoVerificationProxy,
+                ConcurrentFragments = options.ConcurrentFragments,
+                ConcurrentDownloads = options.ConcurrentDownloads,
+                VideoQualityLimit = options.VideoQualityLimit,
+                CookieMode = options.CookieMode, CookieBrowser = options.CookieBrowser,
+                CookieProfileRoot = options.CookieProfileRoot, CookieProfile = options.CookieProfile,
+                CookieFile = options.CookieFile, SilentDownloadFolder = options.SilentDownloadFolder,
                 ProxyEnabled = options.ProxyEnabled, GeoProxyEnabled = options.GeoProxyEnabled,
                 Aria2cPath = options.Aria2cPath, Aria2cSites = options.Aria2cSites,
-                NoProxySites = options.NoProxySites,
-                CustomArguments = options.CustomArguments };
-            Text = "dotSharK 配置"; StartPosition = FormStartPosition.CenterParent; FormBorderStyle = FormBorderStyle.FixedDialog; Icon = AppBranding.CreateIcon();
-            MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false; BackColor = bg; ForeColor = fg; Font = new Font("Microsoft YaHei UI", 9F); ClientSize = new Size(790, 540); MinimumSize = new Size(700, 500);
-            var root = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = bg, Padding = new Padding(16), ColumnCount = 1, RowCount = 2 };
-            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48)); Controls.Add(root);
-            var tabs = new DarkTabHost { Dock = DockStyle.Fill };
-            var toolsPage = new Panel { BackColor = bg, Padding = new Padding(14) };
-            var ytPage = new Panel { BackColor = bg, Padding = new Padding(14) };
-            var silentPage = new Panel { BackColor = bg, Padding = new Padding(14) };
-            var advancedPage = new Panel { BackColor = bg, Padding = new Padding(14) };
-            tabs.AddPage("外部工具", toolsPage); tabs.AddPage("YT-DLP", ytPage);
-            tabs.AddPage("高级下载", advancedPage); tabs.AddPage("静默下载", silentPage);
-            root.Controls.Add(tabs, 0, 0);
-            BuildToolsPage(toolsPage, new[] { ytDlp, ffmpeg, ffprobe, deno, aria2c });
-            BuildYtPage(ytPage);
-            BuildAdvancedPage(advancedPage);
-            BuildSilentPage(silentPage);
-            var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, WrapContents = false, BackColor = bg, Padding = new Padding(0, 8, 0, 0) };
-            var save = StyledButton("保存", true); save.Width = 98; save.DialogResult = DialogResult.None;
-            var cancel = StyledButton("取消", false); cancel.Width = 98; cancel.DialogResult = DialogResult.Cancel; cancel.Margin = new Padding(0, 0, 10, 0);
-            save.Click += SaveClicked; footer.Controls.Add(save); footer.Controls.Add(cancel); root.Controls.Add(footer, 0, 1);
-            AcceptButton = save; CancelButton = cancel; ActiveControl = tabs;
+                NoProxySites = options.NoProxySites, CustomArguments = options.CustomArguments
+            };
+            SuspendLayout();
+            try
+            {
+                Text = "dotSharK 配置";
+                StartPosition = FormStartPosition.CenterParent;
+                FormBorderStyle = FormBorderStyle.FixedDialog;
+                MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false;
+                Icon = AppBranding.CreateIcon();
+                BackColor = Theme.Window; ForeColor = Theme.PrimaryText;
+                Font = Theme.BodyFont;
+                ClientSize = Theme.SettingsClientSize;
+                MinimumSize = Size; MaximumSize = Size;
+                var root = new TableLayoutPanel
+                {
+                    Name = "layoutSettingsRoot", Dock = DockStyle.Fill,
+                    BackColor = Theme.Window, Margin = Padding.Empty,
+                    Padding = new Padding(Theme.Space24), ColumnCount = 1, RowCount = 2
+                };
+                root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute,
+                    Theme.ActionHeight + Theme.Space16 * 2 + Theme.BorderWidth));
+                Controls.Add(root);
+                var tabs = new DarkTabStrip { Name = "tabSettings", Dock = DockStyle.Fill,
+                    Margin = Padding.Empty };
+                var pageTools = NewPage();
+                var pageYt = NewPage();
+                var pageAdvanced = NewPage();
+                var pageSilent = NewPage();
+                tabs.AddPage("外部工具", pageTools);
+                tabs.AddPage("YT-DLP", pageYt);
+                tabs.AddPage("高级下载", pageAdvanced);
+                tabs.AddPage("静默下载", pageSilent);
+                root.Controls.Add(tabs, 0, 0);
+                BuildToolsPage(pageTools, new[] { ytDlp, ffmpeg, ffprobe, deno, aria2c });
+                BuildYtPage(pageYt);
+                BuildAdvancedPage(pageAdvanced);
+                BuildSilentPage(pageSilent);
+                tabs.SelectedIndex = 1;
+
+                var footer = new TableLayoutPanel
+                {
+                    Dock = DockStyle.Fill, Margin = Padding.Empty,
+                    Padding = new Padding(0, Theme.Space16, 0, Theme.Space16),
+                    ColumnCount = 4, RowCount = 2, BackColor = Theme.Window
+                };
+                footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+                footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.FooterButtonWidth));
+                footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.Space8));
+                footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.FooterButtonWidth));
+                footer.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.BorderWidth));
+                footer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+                var divider = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty,
+                    BackColor = Theme.Divider };
+                footer.Controls.Add(divider, 0, 0);
+                footer.SetColumnSpan(divider, 4);
+                var cancel = StyledButton("取消", false);
+                var save = StyledButton("保存", true);
+                cancel.Name = "btnCancel"; save.Name = "btnSave";
+                cancel.DialogResult = DialogResult.Cancel;
+                save.DialogResult = DialogResult.None;
+                cancel.Height = save.Height = Theme.ActionHeight;
+                cancel.Dock = save.Dock = DockStyle.Fill;
+                cancel.Margin = save.Margin = Padding.Empty;
+                save.Click += SaveClicked;
+                footer.Controls.Add(cancel, 1, 1);
+                footer.Controls.Add(save, 3, 1);
+                root.Controls.Add(footer, 0, 1);
+                AssignDialogButtons(save, cancel);
+                ActiveControl = tabs;
+            }
+            finally { ResumeLayout(true); }
+        }
+
+        private static Panel NewPage()
+        {
+            return new Panel { BackColor = Theme.Window, Dock = DockStyle.Fill,
+                Margin = Padding.Empty, Padding = new Padding(0, Theme.Space16, 0, 0) };
+        }
+        private static Label Label(string text, bool heading = false)
+        {
+            return new Label { Text = text,
+                ForeColor = heading ? Theme.PrimaryText : Theme.SecondaryText,
+                Font = heading ? Theme.HeadingFont : Theme.BodyFont,
+                TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true,
+                Dock = DockStyle.Fill, Margin = Padding.Empty };
+        }
+        private static Label Note(string text)
+        {
+            return new Label { Text = text, ForeColor = Theme.SecondaryText,
+                Font = Theme.SmallFont, Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                AutoEllipsis = true, Margin = Padding.Empty };
+        }
+        private static TableLayoutPanel FormTable(int rows)
+        {
+            var t = new TableLayoutPanel {
+                ColumnCount = 2, RowCount = rows,
+                Margin = Padding.Empty, Padding = Padding.Empty,
+                BackColor = Theme.Window, AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink
+            };
+            t.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.LabelColumnWidth));
+            t.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            return t;
+        }
+        private static void SettingRow(TableLayoutPanel table, int index, string text, Control field)
+        {
+            table.RowStyles.Add(new RowStyle(SizeType.Absolute,
+                Theme.ControlHeight + Theme.Space12));
+            table.Controls.Add(Label(text), 0, index);
+            field.Margin = Padding.Empty;
+            table.Controls.Add(field, 1, index);
+        }
+        private sealed class RowPart
+        {
+            internal readonly int Width; internal readonly bool Percent;
+            internal readonly Control Control;
+            internal RowPart(int width, bool percent, Control control)
+            { Width = width; Percent = percent; Control = control; }
+        }
+        private static RowPart Fixed(int width, Control control = null)
+        { return new RowPart(width, false, control); }
+        private static RowPart Fill(Control control)
+        { return new RowPart(100, true, control); }
+        private static TableLayoutPanel Row(params RowPart[] parts)
+        {
+            var t = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill, ColumnCount = parts.Length,
+                RowCount = 1, Margin = Padding.Empty,
+                Padding = Padding.Empty, BackColor = Theme.Window
+            };
+            foreach (var p in parts)
+            {
+                t.ColumnStyles.Add(p.Percent
+                    ? new ColumnStyle(SizeType.Percent, p.Width)
+                    : new ColumnStyle(SizeType.Absolute, p.Width));
+                if (p.Control != null)
+                {
+                    p.Control.Dock = DockStyle.Fill;
+                    p.Control.Margin = Padding.Empty;
+                    t.Controls.Add(p.Control, t.Controls.Count);
+                }
+            }
+            return t;
+        }
+        private static SettingsScrollHost Scrolled(Panel page, Control body)
+        {
+            var host = new SettingsScrollHost
+            { Dock = DockStyle.Fill, Margin = Padding.Empty, Content = body };
+            page.Controls.Add(host);
+            return host;
         }
 
         private void BuildToolsPage(Panel page, string[] values)
