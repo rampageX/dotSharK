@@ -21,6 +21,7 @@ namespace dotSharK
         private MainForm mainWindow;
         private SilentStatusDialog statusWindow;
         private bool exiting;
+        private FormWindowState mainRestoreState = FormWindowState.Normal;
 
         internal SilentTrayContext()
         {
@@ -68,12 +69,21 @@ namespace dotSharK
             {
                 mainWindow = new MainForm();
                 mainWindow.FormClosed += (s, e) => mainWindow = null;
+                mainWindow.Resize += (s, e) =>
+                {
+                    if (mainWindow == null || mainWindow.IsDisposed) return;
+                    if (mainWindow.WindowState == FormWindowState.Minimized)
+                        mainWindow.Hide(); // Minimize to notification area, not the taskbar.
+                    else mainRestoreState = mainWindow.WindowState;
+                };
                 mainWindow.Show();
+                mainRestoreState = mainWindow.WindowState == FormWindowState.Maximized
+                    ? FormWindowState.Maximized : FormWindowState.Normal;
             }
             else
             {
                 if (mainWindow.WindowState == FormWindowState.Minimized)
-                    mainWindow.WindowState = FormWindowState.Normal;
+                    mainWindow.WindowState = mainRestoreState;
                 mainWindow.Show();
                 mainWindow.BringToFront();
                 mainWindow.Activate();
