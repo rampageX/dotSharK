@@ -83,7 +83,7 @@ namespace dotSharK.UiV2
             using (var fill = new SolidBrush(!Enabled ? Theme.Panel : isChecked ? Theme.Accent : Theme.Input))
                 e.Graphics.FillRectangle(fill, check);
             DarkPaint.Border(e.Graphics, check, !Enabled ? Theme.DisabledText :
-                Focused ? Theme.AccentFocus : hover ? Theme.SuccessText : Theme.Border);
+                Focused ? Theme.AccentFocus : pressed ? Theme.AccentPressed : hover ? Theme.SuccessText : Theme.Border);
             if (isChecked)
             {
                 e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
