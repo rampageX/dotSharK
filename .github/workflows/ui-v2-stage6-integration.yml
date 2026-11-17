@@ -106,7 +106,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe'
-          & $compiler /nologo /codepage:65001 /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Core.dll /r:ui-v2\bin\Release\DotSharK.UiFoundation.dll /out:UiV2Stage6Acceptance.exe ci-tests\UiV2Stage6Acceptance.cs
+          & $compiler /nologo /codepage:65001 /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Core.dll /r:System.Web.Extensions.dll /r:ui-v2\bin\Release\DotSharK.UiFoundation.dll /out:UiV2Stage6Acceptance.exe ci-tests\UiV2Stage6Acceptance.cs
           if ($LASTEXITCODE -ne 0) { throw 'Integrated Stage 6 harness compilation failed' }
           Copy-Item src\bin\Release\dotSharK.exe .
           Copy-Item src\bin\Release\DotSharK.UiFoundation.dll .

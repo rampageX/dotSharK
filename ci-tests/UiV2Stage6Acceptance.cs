@@ -324,7 +324,7 @@ internal static class UiV2Stage6Acceptance
             string notMatching = Path.Combine(directory, "completely unrelated video.webm");
             Check(Static("CompletedFileResolver", "Resolve", notMatching, directory) == null,
                 "resolver refuses unrelated existing videos");
-            string titleJson = "dotSharKTitleJson=\\"Color Burst HDR Dolby Vision\\u2122 12K 60FPS\\"";
+            string titleJson = "dotSharKTitleJson=\"Color Burst HDR Dolby Vision\\u2122 12K 60FPS\"";
             Check((string)Static("MainFormV2", "ParsePrintedMetadata", titleJson, "dotSharKTitleJson=") ==
                 "Color Burst HDR Dolby Vision™ 12K 60FPS", "escaped JSON title preserves trademark");
             var escapedPath = new System.Web.Script.Serialization.JavaScriptSerializer().Serialize(actual)
