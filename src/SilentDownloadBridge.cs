@@ -210,7 +210,7 @@ namespace dotSharK
             out string ytDlp, out string ffmpeg, out string ffprobe, out string deno)
         {
             options = new YtDlpOptions();
-            folder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Downloads");
+            folder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Downloads", "Silent");
             ytDlp = ffmpeg = ffprobe = deno = "";
             string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "dotSharK.ini");
             if (File.Exists(path))
@@ -226,7 +226,7 @@ namespace dotSharK
                     int n;
                     switch (key)
                     {
-                        case "folder": if (!String.IsNullOrWhiteSpace(value)) folder = value; break;
+                        case "silent-folder": if (!String.IsNullOrWhiteSpace(value)) folder = value; break;
                         case "yt-dlp": ytDlp = value; break;
                         case "ffmpeg": ffmpeg = value; break;
                         case "ffprobe": ffprobe = value; break;
