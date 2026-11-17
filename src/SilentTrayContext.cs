@@ -43,8 +43,7 @@ namespace dotSharK
         private FormWindowState mainRestoreState;
 
         private static readonly string UiLog = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "dotSharK", "tray-ui.log");
+            AppDomain.CurrentDomain.BaseDirectory, "Logs", "tray-ui.log");
 
         internal SilentTrayContext(bool showMain)
         {

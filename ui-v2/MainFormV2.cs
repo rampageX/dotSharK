@@ -1199,6 +1199,8 @@ namespace dotSharK
                             try { ytdlpOptions.GeoVerificationProxy = System.Text.Encoding.UTF8.GetString(System.Security.Cryptography.ProtectedData.Unprotect(Convert.FromBase64String(value), null, System.Security.Cryptography.DataProtectionScope.CurrentUser)); }
                             catch { ytdlpOptions.GeoVerificationProxy = ""; }
                         }
+                        else if (key == "proxy-portable") ytdlpOptions.Proxy = value;
+                        else if (key == "geo-proxy-portable") ytdlpOptions.GeoVerificationProxy = value;
                         else if (key == "folder") folderBox.Text = value;
                         else if (key == "yt-dlp") ytDlpPath = value;
                         else if (key == "ffmpeg") ffmpegPath = value;
@@ -1234,11 +1236,9 @@ namespace dotSharK
             if (loadingSettings) return;
             try
             {
-                string protectedProxy = Convert.ToBase64String(System.Security.Cryptography.ProtectedData.Protect(System.Text.Encoding.UTF8.GetBytes(ytdlpOptions.Proxy ?? ""), null, System.Security.Cryptography.DataProtectionScope.CurrentUser));
-                string protectedGeoProxy = Convert.ToBase64String(System.Security.Cryptography.ProtectedData.Protect(System.Text.Encoding.UTF8.GetBytes(ytdlpOptions.GeoVerificationProxy ?? ""), null, System.Security.Cryptography.DataProtectionScope.CurrentUser));
                 savedMainWindow = WindowPlacement.Capture(this, lastMainMaximized);
-                File.WriteAllLines(settingsPath, new[] { "proxy=" + protectedProxy,
-                    "geo-proxy=" + protectedGeoProxy,
+                File.WriteAllLines(settingsPath, new[] { "proxy-portable=" + Uri.EscapeDataString(ytdlpOptions.Proxy ?? ""),
+                    "geo-proxy-portable=" + Uri.EscapeDataString(ytdlpOptions.GeoVerificationProxy ?? ""),
                     "proxy-enabled=" + (ytdlpOptions.ProxyEnabled ? "1" : "0"),
                     "geo-proxy-enabled=" + (ytdlpOptions.GeoProxyEnabled ? "1" : "0"),
                     "folder=" + Uri.EscapeDataString(folderBox == null ? "" : folderBox.Text),

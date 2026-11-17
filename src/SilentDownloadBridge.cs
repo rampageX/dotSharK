@@ -16,12 +16,20 @@ namespace dotSharK
     internal static class SilentDownloadBridge
     {
         private static readonly string DataRoot = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "dotSharK", "SilentQueue");
+            AppDomain.CurrentDomain.BaseDirectory, "SilentQueue");
         private static readonly string Pending = Path.Combine(DataRoot, "Pending");
         private static readonly string Active = Path.Combine(DataRoot, "Active");
         private static readonly string Archive = Path.Combine(DataRoot, "downloaded.txt");
         private static readonly string ShowRequest = Path.Combine(DataRoot, "show-main.request");
-        private const string InstanceMutex = @"Local\dotSharK.UnifiedQueue.1";
+        private static readonly string InstanceMutex = CreateInstanceMutex();
+
+        private static string CreateInstanceMutex()
+        {
+            // Separate portable copies must not consume each other's queue or show requests.
+            string root = Path.GetFullPath(AppDomain.CurrentDomain.BaseDirectory).TrimEnd(Path.DirectorySeparatorChar).ToUpperInvariant();
+            using (SHA256 sha = SHA256.Create())
+                return @"Local\dotSharK.UnifiedQueue." + BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(root))).Replace("-", "");
+        }
 
         internal sealed class BrowserRequest
         {

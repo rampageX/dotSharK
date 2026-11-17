@@ -33,6 +33,11 @@ internal static class UiV2Stage6Acceptance
             Directory.CreateDirectory(screenshots);
             app = Assembly.LoadFrom(Path.GetFullPath(args[1]));
             Check(Type("MainFormV2") != null && Type("SilentTrayContext") != null, "integrated V2 and tray are in production EXE");
+            var bridge = Type("SilentDownloadBridge");
+            string expectedRoot = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SilentQueue");
+            Check((string)bridge.GetField("DataRoot", F).GetValue(null) == expectedRoot, "portable queue anchored to EXE directory");
+            Check((string)bridge.GetProperty("ArchivePath", F).GetValue(null, null) == Path.Combine(expectedRoot, "downloaded.txt"), "portable archive anchored to queue");
+            Check((string)Type("SilentTrayContext").GetField("UiLog", F).GetValue(null) == Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Logs", "tray-ui.log"), "portable tray log anchored to EXE directory");
             var media = Media();
             var playlist = Playlist();
             using (var main = NewForm("MainFormV2"))
@@ -48,6 +53,16 @@ internal static class UiV2Stage6Acceptance
                 Check(queue.ContextMenuStrip.Items.Cast<ToolStripItem>().Any(x => x.Text == "打开下载目录"),
                     "completed menu includes open folder");
                 Save(main, "Main.png");
+                var portableOptions = Field(main, "ytdlpOptions");
+                string proxy = "socks5://user:p@ss@127.0.0.1:1080";
+                Field(portableOptions, "Proxy", proxy);
+                main.GetType().GetMethod("SaveSettings", F).Invoke(main, null);
+                Check(File.ReadAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "dotSharK.ini")).Contains("proxy-portable=" + Uri.EscapeDataString(proxy)), "proxy saved without user-bound encryption");
+                Field(portableOptions, "Proxy", "");
+                main.GetType().GetMethod("LoadSettings", F).Invoke(main, null);
+                Check((string)Field(portableOptions, "Proxy") == proxy, "portable proxy roundtrips special characters");
+                Field(portableOptions, "Proxy", "");
+
             }
             using (var settings = Settings())
             {

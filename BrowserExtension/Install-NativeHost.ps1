@@ -20,7 +20,7 @@ if ([IO.Path]::GetFileName($exe) -ne 'dotSharK.exe') {
     throw 'ExePath must point to dotSharK.exe.'
 }
 
-$root = Join-Path $env:LOCALAPPDATA 'dotSharK\NativeMessaging'
+$root = Join-Path (Split-Path -Parent $exe) 'BrowserExtension\NativeMessaging'
 [IO.Directory]::CreateDirectory($root) | Out-Null
 $path = Join-Path $root 'com.rampagex.dotshark.json'
 $manifest = @{
@@ -46,4 +46,4 @@ foreach ($base in @(
 Write-Host "dotSharK Native Messaging installed for extension ID: $ExtensionId"
 Write-Host "Host EXE: $exe"
 Write-Host "Manifest: $path"
-Write-Host "Silent queue/log: $env:LOCALAPPDATA\dotSharK\SilentQueue"
+Write-Host "Silent queue: $(Join-Path (Split-Path -Parent $exe) 'SilentQueue')"
