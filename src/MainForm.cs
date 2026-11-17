@@ -38,6 +38,7 @@ namespace dotSharK
         private readonly System.Windows.Forms.Timer clipboardWatchTimer = new System.Windows.Forms.Timer { Interval = 550 };
         private string clipboardCandidateUrl;
         private bool clipboardFlashBright;
+        private SilentStatusDialog silentStatusWindow;
 
         public MainForm()
         {
@@ -74,10 +75,19 @@ namespace dotSharK
             var logo = new Label { Text = "dotSharK", Font = new Font("Microsoft YaHei UI", 19F, FontStyle.Bold), ForeColor = green, AutoSize = true, Location = new Point(0, 0) };
             var tagline = new Label { Text = "做最快的 yt-dlp 桌面外壳", ForeColor = muted, AutoSize = true, Location = new Point(0, 13) };
             logo.SizeChanged += (s, e) => tagline.Left = logo.Right + 10;
-            var configHost = new Panel { Dock = DockStyle.Right, Width = 110, Padding = new Padding(0, 9, 0, 9) };
+            var actionsHost = new TableLayoutPanel { Dock = DockStyle.Right, Width = 222, ColumnCount = 2,
+                RowCount = 1, Padding = new Padding(0, 9, 0, 9), BackColor = bg };
+            actionsHost.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
+            actionsHost.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
+            actionsHost.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            var silentQueueButton = GhostButton("静默下载", 108);
+            silentQueueButton.Dock = DockStyle.Fill;
+            silentQueueButton.Margin = new Padding(0, 0, 4, 0);
+            silentQueueButton.Click += (s, e) => ShowSilentDownloadStatus();
             configButton = GhostButton("配置…", 110); configButton.Dock = DockStyle.Fill; configButton.Click += OpenConfiguration;
-            configHost.Controls.Add(configButton);
-            brand.Controls.Add(logo); brand.Controls.Add(tagline); tagline.Left = logo.Right + 10; brand.Controls.Add(configHost); root.Controls.Add(brand, 0, 0);
+            actionsHost.Controls.Add(silentQueueButton, 0, 0);
+            actionsHost.Controls.Add(configButton, 1, 0);
+            brand.Controls.Add(logo); brand.Controls.Add(tagline); tagline.Left = logo.Right + 10; brand.Controls.Add(actionsHost); root.Controls.Add(brand, 0, 0);
 
             var entry = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, BackColor = bg, Padding = new Padding(0, 9, 0, 9) };
             entry.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); entry.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104));
@@ -588,6 +598,23 @@ namespace dotSharK
             using (var d = new FolderBrowserDialog { Description = "选择视频保存目录", SelectedPath = Directory.Exists(folderBox.Text) ? folderBox.Text : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Downloads"), ShowNewFolderButton = true })
                 if (d.ShowDialog(this) == DialogResult.OK) folderBox.Text = d.SelectedPath;
         }
+        private void ShowSilentDownloadStatus()
+        {
+            if (silentStatusWindow == null || silentStatusWindow.IsDisposed)
+            {
+                silentStatusWindow = new SilentStatusDialog();
+                silentStatusWindow.FormClosed += (s, e) => silentStatusWindow = null;
+                silentStatusWindow.Show(this);
+            }
+            else
+            {
+                if (silentStatusWindow.WindowState == FormWindowState.Minimized)
+                    silentStatusWindow.WindowState = FormWindowState.Normal;
+                silentStatusWindow.BringToFront();
+                silentStatusWindow.Activate();
+            }
+        }
+
         private void OpenConfiguration(object sender, EventArgs e)
         {
             using (var d = new ConfigurationDialog(ytDlpPath, ffmpegPath, ffprobePath, denoPath, ytdlpOptions))
