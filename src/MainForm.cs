@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Runtime.InteropServices;
 
 namespace dotSharK
 {
@@ -15,7 +16,8 @@ namespace dotSharK
     {
         private readonly Color bg = Color.FromArgb(34, 34, 34), panel = Color.FromArgb(43, 43, 43), green = DarkPalette.Accent, muted = Color.FromArgb(153, 163, 170), fg = Color.FromArgb(235, 238, 240), line = Color.FromArgb(65, 65, 65);
         private DarkTextBox urlBox, folderBox, logBox;
-        private Button analyzeButton, downloadButton, configButton, browseFolderButton;
+        private DarkButton analyzeButton;
+        private Button downloadButton, configButton, browseFolderButton;
         private Button removeQueueButton, clearFinishedButton, retryFailedButton;
         private DataGridView queueGrid;
         private Label stateLabel, queueCountLabel;
@@ -33,6 +35,9 @@ namespace dotSharK
         private readonly string settingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "dotSharK.ini");
         private WindowPlacement savedMainWindow, savedPlaylistWindow;
         private bool lastMainMaximized;
+        private readonly System.Windows.Forms.Timer clipboardWatchTimer = new System.Windows.Forms.Timer { Interval = 550 };
+        private string clipboardCandidateUrl;
+        private bool clipboardFlashBright;
 
         public MainForm()
         {
@@ -54,6 +59,9 @@ namespace dotSharK
             denoPath = ExistingOrDefault(denoPath, "deno.exe");
             RefreshClient();
             SetState(client == null ? "请先在“配置…”中指定 yt-dlp.exe。" : "就绪 · " + Path.GetFileName(client.ExecutablePath));
+            clipboardWatchTimer.Tick += (s, e) => UpdateClipboardAttention();
+            Activated += (s, e) => { UpdateClipboardAttention(); clipboardWatchTimer.Start(); };
+            Deactivate += (s, e) => { clipboardWatchTimer.Stop(); ClearClipboardAttention(); };
         }
 
         private void BuildUi()
@@ -75,7 +83,7 @@ namespace dotSharK
             entry.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); entry.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104));
             entry.RowStyles.Add(new RowStyle(SizeType.Absolute, DarkPalette.ControlHeight));
             urlBox = InputBox(); urlBox.Dock = DockStyle.Fill; urlBox.Margin = Padding.Empty; urlBox.Text = "";
-            analyzeButton = AccentButton("分析链接"); analyzeButton.Dock = DockStyle.Fill; analyzeButton.Click += async (s, e) => await Analyze();
+            analyzeButton = AccentButton("分析链接"); analyzeButton.Dock = DockStyle.Fill; analyzeButton.Click += async (s, e) => await AnalyzeFromButton();
             entry.Controls.Add(urlBox, 0, 0); entry.Controls.Add(analyzeButton, 1, 0);
             root.Controls.Add(entry, 0, 1);
 
@@ -146,6 +154,76 @@ namespace dotSharK
         private DarkTextBox InputBox() { return new DarkTextBox { Font = new Font(Font.FontFamily, 9F), AutoSize = false, Height = DarkPalette.ControlHeight, Margin = Padding.Empty }; }
         private DarkButton AccentButton(string text) { return new DarkButton { Text = text, Primary = true, Font = new Font(Font.FontFamily, 9F, FontStyle.Bold), Height = DarkPalette.ControlHeight, MinimumSize = new Size(0, DarkPalette.ControlHeight) }; }
         private DarkButton GhostButton(string text, int width) { return new DarkButton { Text = text, Width = width, Height = DarkPalette.ControlHeight, MinimumSize = new Size(0, DarkPalette.ControlHeight), Font = Font }; }
+
+        // Check the clipboard only while the main window is foreground. No background polling.
+        private void UpdateClipboardAttention()
+        {
+            if (IsDisposed || !Visible || Form.ActiveForm != this || !analyzeButton.Enabled)
+            {
+                ClearClipboardAttention();
+                return;
+            }
+
+            string candidate = ReadClipboardCandidate();
+            if (candidate == null)
+            {
+                ClearClipboardAttention();
+                return;
+            }
+
+            if (!String.Equals(candidate, clipboardCandidateUrl, StringComparison.Ordinal))
+            {
+                clipboardCandidateUrl = candidate;
+                clipboardFlashBright = true;
+            }
+            else clipboardFlashBright = !clipboardFlashBright;
+            analyzeButton.AttentionHighlight = clipboardFlashBright;
+        }
+
+        private void ClearClipboardAttention()
+        {
+            clipboardCandidateUrl = null;
+            clipboardFlashBright = false;
+            if (analyzeButton != null && !analyzeButton.IsDisposed)
+                analyzeButton.AttentionHighlight = false;
+        }
+
+        private static string ReadClipboardCandidate()
+        {
+            try { return NormalizeDownloadLink(Clipboard.GetText(TextDataFormat.UnicodeText)); }
+            catch (ExternalException) { return null; } // Another application holds the clipboard.
+            catch (System.Threading.ThreadStateException) { return null; }
+        }
+
+        // Accept a single, complete web URL; yt-dlp decides if its site is supported.
+        internal static string NormalizeDownloadLink(string raw)
+        {
+            if (String.IsNullOrWhiteSpace(raw)) return null;
+            string candidate = raw.Trim();
+            if (candidate.Length > 4096 || candidate.Any(Char.IsWhiteSpace)) return null;
+            Uri uri;
+            if (!Uri.TryCreate(candidate, UriKind.Absolute, out uri)) return null;
+            if ((uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) ||
+                String.IsNullOrWhiteSpace(uri.Host) || !String.IsNullOrEmpty(uri.UserInfo))
+                return null;
+            return candidate;
+        }
+
+        private async Task AnalyzeFromButton()
+        {
+            if (Form.ActiveForm == this)
+            {
+                string candidate = ReadClipboardCandidate();
+                if (candidate != null)
+                {
+                    urlBox.Text = candidate;
+                    urlBox.SelectionStart = urlBox.TextLength;
+                    urlBox.SelectionLength = 0;
+                }
+            }
+            ClearClipboardAttention();
+            await Analyze();
+        }
 
         private async Task Analyze()
         {
@@ -587,6 +665,12 @@ namespace dotSharK
             catch { }
         }
         protected override void OnFormClosing(FormClosingEventArgs e) { SaveSettings(); base.OnFormClosing(e); }
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            clipboardWatchTimer.Stop();
+            clipboardWatchTimer.Dispose();
+            base.OnFormClosed(e);
+        }
     }
 
 }
