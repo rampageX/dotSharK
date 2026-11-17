@@ -639,6 +639,7 @@ namespace dotSharK
                         else if (key == "fragments") { int n; if (Int32.TryParse(value, out n)) ytdlpOptions.ConcurrentFragments = Math.Max(1, Math.Min(32, n)); }
                         else if (key == "downloads") { int n; if (Int32.TryParse(value, out n)) ytdlpOptions.ConcurrentDownloads = Math.Max(1, Math.Min(6, n)); }
                         else if (key == "video-quality-limit") { int n; if (Int32.TryParse(value, out n)) ytdlpOptions.VideoQualityLimit = Math.Max(0, Math.Min(9999, n)); }
+                        else if (key == "silent-folder" && !String.IsNullOrWhiteSpace(value)) ytdlpOptions.SilentDownloadFolder = value;
                         else if (key == "main-window") savedMainWindow = WindowPlacement.Parse(value);
                         else if (key == "playlist-window") savedPlaylistWindow = WindowPlacement.Parse(value);
                         else if (key == "cookie-mode") ytdlpOptions.CookieMode = value == "file" ? "file" : "browser";
@@ -667,6 +668,7 @@ namespace dotSharK
                     "ffprobe=" + Uri.EscapeDataString(ffprobePath), "deno=" + Uri.EscapeDataString(denoPath),
                     "fragments=" + ytdlpOptions.ConcurrentFragments, "downloads=" + Math.Max(1, Math.Min(6, ytdlpOptions.ConcurrentDownloads)),
                     "video-quality-limit=" + ytdlpOptions.VideoQualityLimit,
+                    "silent-folder=" + Uri.EscapeDataString(ytdlpOptions.SilentDownloadFolder ?? ""),
                     "main-window=" + savedMainWindow.Serialize(),
                     "playlist-window=" + (savedPlaylistWindow == null ? "" : savedPlaylistWindow.Serialize()),
                     "cookie-mode=" + ytdlpOptions.CookieMode,
