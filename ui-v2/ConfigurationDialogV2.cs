@@ -23,6 +23,9 @@ namespace dotSharK
         private readonly string[] toolNames = { "yt-dlp.exe", "ffmpeg.exe", "ffprobe.exe", "deno.exe", "aria2c.exe" };
         private FlatTextBox proxyBox, geoProxyBox, profileRootBox, cookieFileBox;
         private FlatTextBox silentFolderBox;
+        private DarkCheckBox keepCompletedBox;
+        private V2Combo silentResolutionBox;
+        private static readonly int[] SilentHeightOptions = { 0, 4320, 2160, 1080, 720 };
         private FlatTextArea ariaSitesBox, noProxySitesBox, customArgumentsBox;
         private DarkCheckBox proxyEnabledBox, geoProxyEnabledBox;
         private DarkNumeric fragmentsBox;
@@ -58,7 +61,8 @@ namespace dotSharK
                 CookieFile = options.CookieFile, SilentDownloadFolder = options.SilentDownloadFolder,
                 ProxyEnabled = options.ProxyEnabled, GeoProxyEnabled = options.GeoProxyEnabled,
                 Aria2cPath = options.Aria2cPath, Aria2cSites = options.Aria2cSites,
-                NoProxySites = options.NoProxySites, CustomArguments = options.CustomArguments
+                NoProxySites = options.NoProxySites, CustomArguments = options.CustomArguments,
+                KeepCompletedTasks = options.KeepCompletedTasks, SilentMaxHeight = options.SilentMaxHeight
             };
             SuspendLayout();
             try
@@ -536,11 +540,13 @@ namespace dotSharK
         {
             var content = new TableLayoutPanel
             {
-                ColumnCount = 1, RowCount = 5, Margin = Padding.Empty,
+                ColumnCount = 1, RowCount = 7, Margin = Padding.Empty,
                 Padding = Padding.Empty, BackColor = bg,
                 AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink
             };
             content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            content.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight));
+            content.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space12));
             content.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight));
             content.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space12));
             content.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight));
@@ -569,11 +575,19 @@ namespace dotSharK
                 Fixed(Theme.LabelColumnWidth, Label("独立保存到")),
                 Fill(silentFolderBox), Fixed(Theme.Space8),
                 Fixed(Theme.BrowseButtonWidth, browse)), 0, 2);
+            silentResolutionBox = StyledCombo(new object[] { "最高", "8K", "4K", "1080p", "720p" });
+            silentResolutionBox.Name = "cboSilentMaxResolution";
+            int selected = Array.IndexOf(SilentHeightOptions, Options.SilentMaxHeight);
+            silentResolutionBox.SelectedIndex = selected < 0 ? 0 : selected;
+            content.Controls.Add(Row(
+                Fixed(Theme.LabelColumnWidth, Label("最高分辨率")),
+                Fixed(Theme.Space24 * 8 + Theme.Space8, silentResolutionBox),
+                Fixed(Theme.Space16), Fill(Note("仅限制视频分辨率，其余质量排序不变"))), 0, 4);
             content.Controls.Add(Row(
                 Fixed(Theme.LabelColumnWidth), Fill(Note(
                     "只影响浏览器右键“发送到 dotSharK”下载。主窗口的“保存到”保持独立。" +
                     Environment.NewLine +
-                    "最高分辨率 / 最高帧率 / HDR / AV1 优先；按已保存的 yt-dlp 代理和 Cookie 下载，不弹窗口。"))), 0, 4);
+                    "帧率 / HDR / AV1 / 音频优先级不变；继续使用已保存的代理和 Cookie。"))), 0, 6);
             MountPage(page, content);
         }
 
@@ -590,13 +604,15 @@ namespace dotSharK
         {
             var root = new TableLayoutPanel
             {
-                ColumnCount = 3, RowCount = 7, Margin = Padding.Empty,
+                ColumnCount = 3, RowCount = 9, Margin = Padding.Empty,
                 Padding = Padding.Empty, BackColor = bg,
                 AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink
             };
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.Space16));
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space12));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space24 * 5));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space24 * 2));
@@ -605,8 +621,12 @@ namespace dotSharK
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space24 * 4));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space24 * 2));
 
-            root.Controls.Add(Label("使用 aria2c 下载的站点", true), 0, 0);
-            root.Controls.Add(Label("以下站点不使用代理", true), 2, 0);
+            keepCompletedBox = StyledToggle("重启后保留已完成任务", Options.KeepCompletedTasks);
+            keepCompletedBox.Name = "chkKeepCompleted";
+            root.Controls.Add(keepCompletedBox, 0, 0);
+            root.SetColumnSpan(keepCompletedBox, 3);
+            root.Controls.Add(Label("使用 aria2c 下载的站点", true), 0, 2);
+            root.Controls.Add(Label("以下站点不使用代理", true), 2, 2);
             ariaSitesBox = new FlatTextArea
             {
                 Name = "txtAria2cSites", Text = Options.Aria2cSites ?? "",
@@ -617,12 +637,12 @@ namespace dotSharK
                 Name = "txtNoProxySites", Text = Options.NoProxySites ?? "",
                 Font = Theme.MonoFont, Dock = DockStyle.Fill, Margin = Padding.Empty
             };
-            root.Controls.Add(ariaSitesBox, 0, 1);
-            root.Controls.Add(noProxySitesBox, 2, 1);
-            root.Controls.Add(Note("空格/换行分隔域名，如 youtube.com，自动覆盖所有子域名；按输入网页网址匹配，不看视频 CDN。"), 0, 2);
-            root.Controls.Add(Note("规则相同；命中时主代理和地域验证代理均不使用，已保存的代理地址不受影响。"), 2, 2);
+            root.Controls.Add(ariaSitesBox, 0, 3);
+            root.Controls.Add(noProxySitesBox, 2, 3);
+            root.Controls.Add(Note("空格/换行分隔域名，如 youtube.com，自动覆盖所有子域名；按输入网页网址匹配，不看视频 CDN。"), 0, 4);
+            root.Controls.Add(Note("规则相同；命中时主代理和地域验证代理均不使用，已保存的代理地址不受影响。"), 2, 4);
             var commandTitle = Label("自定义 yt-dlp 原生命令行参数（下载与分析均生效）", true);
-            root.Controls.Add(commandTitle, 0, 4);
+            root.Controls.Add(commandTitle, 0, 6);
             root.SetColumnSpan(commandTitle, 3);
             customArgumentsBox = new FlatTextArea
             {
@@ -630,12 +650,12 @@ namespace dotSharK
                 Text = Options.CustomArguments ?? "",
                 Font = Theme.MonoFont, Dock = DockStyle.Fill, Margin = Padding.Empty
             };
-            root.Controls.Add(customArgumentsBox, 0, 5);
+            root.Controls.Add(customArgumentsBox, 0, 7);
             root.SetColumnSpan(customArgumentsBox, 3);
             var hint = Note("例如 --retries 20 --no-mtime；支持带引号的参数值，自定义参数覆盖一般内置设置。" +
                 Environment.NewLine +
                 "无代理站点规则优先于自定义代理参数。aria2c.exe 在「外部工具」页指定。");
-            root.Controls.Add(hint, 0, 6);
+            root.Controls.Add(hint, 0, 8);
             root.SetColumnSpan(hint, 3);
             MountPage(page, root);
         }
@@ -680,6 +700,8 @@ namespace dotSharK
                 return;
             }
             Options.ConcurrentFragments = (int)fragmentsBox.Value; Options.ConcurrentDownloads = (int)downloadsBox.Value; Options.VideoQualityLimit = (int)qualityLimitBox.Value;
+            Options.KeepCompletedTasks = keepCompletedBox.Checked;
+            Options.SilentMaxHeight = SilentHeightOptions[Math.Max(0, silentResolutionBox.SelectedIndex)];
             Options.CookieMode = sourceBox.SelectedIndex == 1 ? "file" : "browser";
             string silentFolder = silentFolderBox.Text.Trim();
             if (String.IsNullOrWhiteSpace(silentFolder))

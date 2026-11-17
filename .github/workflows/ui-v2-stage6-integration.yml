@@ -118,6 +118,19 @@ jobs:
           physical 125%/150% DPI display checks.
           "@ | Set-Content package\README.txt -Encoding UTF8
           Compress-Archive -Path package\* -DestinationPath dotSharK_UI_V2_Stage6_Integrated_Windows.zip -Force
+      - name: Package lightweight EXE + UI DLL for existing tool installations
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force package-light | Out-Null
+          Copy-Item src\bin\Release\dotSharK.exe package-light\
+          Copy-Item src\bin\Release\DotSharK.UiFoundation.dll package-light\
+          Compress-Archive -Path package-light\* -DestinationPath dotSharK_UIV2_Lightweight_Windows.zip -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dotSharK-ui-v2-lightweight-exe-dll
+          path: dotSharK_UIV2_Lightweight_Windows.zip
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()
         with:

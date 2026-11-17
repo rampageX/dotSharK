@@ -28,7 +28,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Program.cs"/><Compile Include="AppBranding.cs"/><Compile Include="..\ui-v2\MainFormV2.cs"/><Compile Include="..\ui-v2\ConfigurationDialogV2.cs"/><Compile Include="..\ui-v2\SelectionDialogsV2.cs"/><Compile Include="DarkControls.cs"/><Compile Include="YtDlpClient.cs"/>
-    <Compile Include="Models.cs"/><Compile Include="WindowPlacement.cs"/><Compile Include="SelectionDialogs.cs"/><Compile Include="ExternalToolUpdater.cs"/><Compile Include="SilentDownloadBridge.cs"/><Compile Include="SilentTrayContext.cs"/><Compile Include="Properties\AssemblyInfo.cs"/>
+    <Compile Include="Models.cs"/><Compile Include="CompletedQueueStore.cs"/><Compile Include="WindowPlacement.cs"/><Compile Include="SelectionDialogs.cs"/><Compile Include="ExternalToolUpdater.cs"/><Compile Include="SilentDownloadBridge.cs"/><Compile Include="SilentTrayContext.cs"/><Compile Include="Properties\AssemblyInfo.cs"/>
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Resources\dotShark.ico"><LogicalName>dotSharK.Resources.dotShark.ico</LogicalName></EmbeddedResource>

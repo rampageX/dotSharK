@@ -144,7 +144,8 @@ namespace dotSharK
             CancellationToken cancellationToken, string originPageUrl = null)
         {
             var args = CommonArguments(options, true);
-            args.AddRange(new[] { "--no-playlist", "--newline", "--progress", "-P", folder, "-o", "%(title)s.%(ext)s" });
+            args.AddRange(new[] { "--no-playlist", "--newline", "--progress", "-P", folder, "-o", "%(title)s.%(ext)s",
+                "--print", "after_move:dotSharKFile=%(filepath)s" });
             // If both tools are configured, PATH below lets ffmpeg and ffprobe live in
             // separate folders. With only ffmpeg configured, yt-dlp can find a sibling probe.
             if (!String.IsNullOrWhiteSpace(FfmpegPath) && String.IsNullOrWhiteSpace(FfprobePath)) { args.Add("--ffmpeg-location"); args.Add(FfmpegPath); }
@@ -169,8 +170,16 @@ namespace dotSharK
             if (result.ExitCode != 0) throw new InvalidOperationException(UsefulError(result.Stderr, result.ExitCode));
         }
 
-        // Headless browser queue: highest resolution and FPS first, then HDR and AV1.
-        // No fixed format ID, quality cap or container restriction. Always one page video.
+        // Preserve FPS, HDR, codec, bitrate and audio preference; cap only height.
+        internal static string SilentFormatSelector(YtDlpOptions options)
+        {
+            int height = options == null ? 0 : options.SilentMaxHeight;
+            if (height != 4320 && height != 2160 && height != 1080 && height != 720)
+                return "bv*+ba/b";
+            return "bv*[height<=" + height + "]+ba/b[height<=" + height + "]";
+        }
+
+        // Browser download only; normal queued video quality is unchanged.
         internal async Task DownloadSilentAsync(string url, string folder, string archivePath,
             YtDlpOptions options, Action<string> output, CancellationToken cancellationToken)
         {
@@ -180,7 +189,8 @@ namespace dotSharK
                 "-P", folder, "-o", "%(title)s [%(id)s].%(ext)s",
                 "--download-archive", archivePath,
                 "--print", "before_dl:dotSharKTitle=%(title)s",
-                "-f", "bv*+ba/b", "--format-sort-force",
+                "--print", "after_move:dotSharKFile=%(filepath)s",
+                "-f", SilentFormatSelector(options), "--format-sort-force",
                 "-S", "res,fps,hdr,vcodec,br"
             });
             if (!String.IsNullOrWhiteSpace(FfmpegPath) && String.IsNullOrWhiteSpace(FfprobePath))
@@ -199,7 +209,8 @@ namespace dotSharK
         {
             if (item == null || String.IsNullOrWhiteSpace(item.Url)) throw new InvalidOperationException("播放列表项目网址为空。");
             var args = CommonArguments(options, true);
-            args.AddRange(new[] { "--no-playlist", "--newline", "--progress", "-P", item.OutputFolder, "-o", "%(title)s [%(id)s].%(ext)s" });
+            args.AddRange(new[] { "--no-playlist", "--newline", "--progress", "-P", item.OutputFolder, "-o", "%(title)s [%(id)s].%(ext)s",
+                "--print", "after_move:dotSharKFile=%(filepath)s" });
             if (!String.IsNullOrWhiteSpace(FfmpegPath) && String.IsNullOrWhiteSpace(FfprobePath)) { args.Add("--ffmpeg-location"); args.Add(FfmpegPath); }
             args.Add("-f"); args.Add(PlaylistFormatSelector(item));
             if (!String.IsNullOrWhiteSpace(item.Container)) { args.Add("--merge-output-format"); args.Add(item.Container.ToLowerInvariant()); }

@@ -23,6 +23,8 @@ namespace dotSharK
         public string CookieProfileRoot = "";
         public string CookieProfile = "";
         public string CookieFile = "";
+        public bool KeepCompletedTasks;
+        public int SilentMaxHeight; // 0=highest; otherwise 4320/2160/1080/720
     }
 
     internal sealed class BrowserOption
@@ -63,6 +65,7 @@ namespace dotSharK
     internal sealed class DownloadQueueItem
     {
         public string Title, Url, Container, SubtitleLanguage, OutputFolder, Status;
+        public string FilePath, DisplaySource, DisplayQuality;
         public double ProgressWeight = 1;
         public double ProgressPercent;
         public MediaInfo Media;

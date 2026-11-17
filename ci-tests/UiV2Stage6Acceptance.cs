@@ -40,6 +40,13 @@ internal static class UiV2Stage6Acceptance
                 Show(main);
                 Check(Find<DataGridView>(main, "gridQueue") is DarkDataGridView, "production queue uses V2 dark grid");
                 Check(Find<FlatTextArea>(main, "txtLog") != null, "production log uses V2 dark editor");
+                Check(Find<FlatTextArea>(main, "txtLog").Font.FontFamily.Name == Theme.BodyFont.FontFamily.Name,
+                    "log Chinese font matches UI");
+                var queue = Find<DataGridView>(main, "gridQueue");
+                Check(queue.Columns["source"].Width < queue.Columns["status"].Width,
+                    "source compact and status readable");
+                Check(queue.ContextMenuStrip.Items.Cast<ToolStripItem>().Any(x => x.Text == "打开下载目录"),
+                    "completed menu includes open folder");
                 Save(main, "Main.png");
             }
             using (var settings = Settings())
@@ -55,6 +62,10 @@ internal static class UiV2Stage6Acceptance
                     Check(!((ScrollableControl)tabs.Pages[i].Content).AutoScroll, "settings page " + i + " has no outer scrolling");
                 }
                 Check(Find<Button>(settings, "btnSave") != null, "configuration has save action");
+                Check(Find<DarkCheckBox>(settings, "chkKeepCompleted") != null,
+                    "advanced settings has completed-history option");
+                Check(Find<DarkComboBox>(settings, "cboSilentMaxResolution").SelectedIndex == 0,
+                    "silent quality defaults to highest");
             }
             using (var quality = (Form)Activator.CreateInstance(Type("SingleVideoDialogV2"), F, null, new[] { media }, null))
             {
@@ -80,6 +91,8 @@ internal static class UiV2Stage6Acceptance
                     "playlist returns 30 real queue model items");
             }
             CheckConfigRoundtrip();
+            CheckCompletedStorage();
+            CheckSilentResolutionSelectors();
             CheckCommandLine();
             CheckNativeHost();
             CheckDownloads(args[2], args[3], args[4]);
@@ -197,6 +210,8 @@ internal static class UiV2Stage6Acceptance
             Find<FlatTextArea>(form, "txtAria2cSites").Text = "youtube.com";
             Find<FlatTextArea>(form, "txtNoProxySites").Text = "example.org";
             Find<FlatTextArea>(form, "txtCustomYtDlpArgs").Text = "--retries 3";
+            Find<DarkCheckBox>(form, "chkKeepCompleted").Checked = true;
+            Find<DarkComboBox>(form, "cboSilentMaxResolution").SelectedIndex = 3;
             Find<Button>(form, "btnSave").PerformClick();
             Check(form.DialogResult == DialogResult.OK, "settings save returns OK");
             var opt = form.GetType().GetProperty("Options", F).GetValue(form, null);
@@ -208,8 +223,53 @@ internal static class UiV2Stage6Acceptance
                 "advanced site filters persist");
             Check((string)Field(opt, "CookieMode") == "browser" && (string)Field(opt, "CustomArguments") == "--retries 3",
                 "browser cookie mode and custom yt-dlp arguments persist");
+            Check((bool)Field(opt, "KeepCompletedTasks"), "completed-history checkbox saves");
+            Check((int)Field(opt, "SilentMaxHeight") == 1080, "1080p silent cap saves");
         }
     }
+    static void CheckCompletedStorage()
+    {
+        string path = Path.Combine(Path.GetTempPath(), "dotSharK-completed-test-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            var item = New("DownloadQueueItem");
+            Field(item, "Status", "已完成");
+            Field(item, "Title", "Chinese 测试 video");
+            Field(item, "DisplaySource", "浏览器");
+            Field(item, "DisplayQuality", "1080p 以内");
+            Field(item, "FilePath", @"C:\Videos\finished.mp4");
+            Field(item, "OutputFolder", @"C:\Videos");
+            var listType = typeof(List<>).MakeGenericType(Type("DownloadQueueItem"));
+            var list = (IList)Activator.CreateInstance(listType);
+            list.Add(item);
+            Static("CompletedQueueStore", "Save", path, list);
+            Check(File.Exists(path), "completed history is written to disk");
+            var restored = (IList)Static("CompletedQueueStore", "Load", path);
+            Check(restored.Count == 1 && (string)Field(restored[0], "Title") == "Chinese 测试 video",
+                "completed row restores after restart");
+            Check((string)Field(restored[0], "FilePath") == @"C:\Videos\finished.mp4" &&
+                (string)Field(restored[0], "DisplaySource") == "浏览器",
+                "completed output path and source restore");
+            Static("CompletedQueueStore", "Save", path, Activator.CreateInstance(listType));
+            Check(!File.Exists(path), "clearing completed history deletes disk snapshot");
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
+
+    static void CheckSilentResolutionSelectors()
+    {
+        var opt = New("YtDlpOptions");
+        var limits = new[] { 0, 4320, 2160, 1080, 720 };
+        foreach (int limit in limits)
+        {
+            Field(opt, "SilentMaxHeight", limit);
+            string selector = (string)Static("YtDlpClient", "SilentFormatSelector", opt);
+            Check(limit == 0 ? selector == "bv*+ba/b" :
+                selector.Contains("[height<=" + limit + "]") &&
+                !selector.Contains("[height>" + limit + "]"), "silent resolution selector " + limit);
+        }
+    }
+
     static void CheckCommandLine()
     {
         var opt = New("YtDlpOptions");
@@ -290,6 +350,8 @@ internal static class UiV2Stage6Acceptance
                     "actual integrated download queue finishes");
                 Check(Directory.GetFiles((string)Field(item, "OutputFolder"), "*.mp4").Length > 0,
                     "actual integrated queue outputs MP4");
+                Check(File.Exists((string)Field(item, "FilePath")),
+                    "yt-dlp after_move returns actual playable output path");
                 Save(main, "Main_RealDownload.png");
             }
         }

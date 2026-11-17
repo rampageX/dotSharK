@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -55,6 +56,7 @@ namespace dotSharK
         private readonly Dictionary<DownloadQueueItem, double> currentRunProgress = new Dictionary<DownloadQueueItem, double>();
         private List<DownloadQueueItem> currentRunItems = new List<DownloadQueueItem>();
         private readonly string settingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "dotSharK.ini");
+        private readonly string completedPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "dotSharK-completed.json");
         private WindowPlacement savedMainWindow, savedPlaylistWindow;
         private bool lastMainMaximized;
         private readonly System.Windows.Forms.Timer clipboardWatchTimer = new System.Windows.Forms.Timer { Interval = 550 };
@@ -104,7 +106,7 @@ namespace dotSharK
         {
             Text = "dotSharK  ·  YouTube Downloader"; StartPosition = FormStartPosition.CenterScreen; MinimumSize = Theme.MainMinimumSize; Size = new Size(1120, 820);
             BackColor = bg; ForeColor = fg; Font = Theme.BodyFont; FormBorderStyle = FormBorderStyle.Sizable; KeyPreview = true; Icon = AppBranding.CreateIcon();
-            BuildUi(); LoadSettings();
+            BuildUi(); LoadSettings(); LoadCompletedQueue();
             if (savedMainWindow != null)
             {
                 savedMainWindow.Restore(this);
@@ -296,10 +298,15 @@ namespace dotSharK
                     AutoSizeMode = DataGridViewAutoSizeColumnMode.None
                 });
                 queueGrid.SelectionChanged += (s, e) => UpdateQueueControls();
-                // Context menu actions are exactly the original pause/retry handlers.
+                // Dark context menu includes file/folder actions for completed tasks.
                 var queueMenu = DarkContextMenuRendererV2();
                 var pauseOneMenuItem = new ToolStripMenuItem("暂停此项");
                 var retryOneMenuItem = new ToolStripMenuItem("继续/重试此项");
+                var openFileMenuItem = new ToolStripMenuItem("打开");
+                var openFolderMenuItem = new ToolStripMenuItem("打开下载目录");
+                queueMenu.Items.Add(openFileMenuItem);
+                queueMenu.Items.Add(openFolderMenuItem);
+                queueMenu.Items.Add(new ToolStripSeparator());
                 queueMenu.Items.Add(pauseOneMenuItem);
                 queueMenu.Items.Add(retryOneMenuItem);
                 DownloadQueueItem contextItem = null;
@@ -313,17 +320,19 @@ namespace dotSharK
                         queueGrid.Rows[e.RowIndex].Selected = true;
                         contextItem = queueGrid.Rows[e.RowIndex].Tag as DownloadQueueItem;
                     }
-                    UpdateItemContextActions(contextItem, pauseOneMenuItem, retryOneMenuItem);
+                    UpdateItemContextActions(contextItem, pauseOneMenuItem, retryOneMenuItem, openFileMenuItem, openFolderMenuItem);
                 };
                 queueMenu.Opening += (s, e) =>
                 {
                     if (contextItem == null || !queueItems.Contains(contextItem))
                         contextItem = queueGrid.SelectedRows.Count > 0
                             ? queueGrid.SelectedRows[0].Tag as DownloadQueueItem : null;
-                    UpdateItemContextActions(contextItem, pauseOneMenuItem, retryOneMenuItem);
+                    UpdateItemContextActions(contextItem, pauseOneMenuItem, retryOneMenuItem, openFileMenuItem, openFolderMenuItem);
                 };
                 pauseOneMenuItem.Click += (s, e) => PauseQueueItem(contextItem);
                 retryOneMenuItem.Click += (s, e) => ResumeQueueItem(contextItem);
+                openFileMenuItem.Click += (s, e) => OpenCompletedItem(contextItem, false);
+                openFolderMenuItem.Click += (s, e) => OpenCompletedItem(contextItem, true);
                 queueGrid.ContextMenuStrip = queueMenu;
                 var gridFrame = new Panel
                 {
@@ -366,7 +375,7 @@ namespace dotSharK
                 logBox = new FlatTextArea
                 {
                     Name = "txtLog", Dock = DockStyle.Fill, Margin = Padding.Empty,
-                    ReadOnly = true, Font = Theme.MonoFont, WordWrap = true
+                    ReadOnly = true, Font = Theme.BodyFont, WordWrap = true
                 };
                 root.Controls.Add(logBox, 0, 8);
 
@@ -647,7 +656,8 @@ namespace dotSharK
                                 };
                                 Action<string> output = lineText =>
                                 {
-                                    AppendLog("[" + item.Title + "] " + lineText);
+                                    if (!lineText.StartsWith("dotSharKFile=", StringComparison.Ordinal))
+                                        AppendLog("[" + item.Title + "] " + lineText);
                                     ReportDownloadLine(item, itemProgress, lineText);
                                 };
                                 if (item.BrowserSilent)
@@ -671,6 +681,7 @@ namespace dotSharK
                             catch (Exception ex) { item.Status = "失败"; AppendLog("[失败] " + item.Title + " · " + ex.Message); }
                             finally { itemCancellation.Remove(item); }
                             UpdateQueueRow(item);
+                            if (item.Status == "已完成") PersistCompletedQueue();
                             if (item.BrowserSilent && (item.Status == "已完成" || item.Status == "失败"))
                                 SilentDownloadBridge.CompleteJob(item.BrowserJobPath);
                         }
@@ -711,13 +722,57 @@ namespace dotSharK
             if (queueCancellation != null) queueCancellation.Cancel();
         }
 
-        private void UpdateItemContextActions(DownloadQueueItem item, ToolStripMenuItem pause, ToolStripMenuItem resume)
+        private void UpdateItemContextActions(DownloadQueueItem item, ToolStripMenuItem pause, ToolStripMenuItem resume,
+            ToolStripMenuItem openFile, ToolStripMenuItem openFolder)
         {
+            bool completed = item != null && item.Status == "已完成";
+            openFile.Visible = openFolder.Visible = completed;
+            openFile.Enabled = openFolder.Enabled = completed;
             pause.Enabled = item != null && (item.Status == "等待中" || item.Status == "下载中");
             resume.Enabled = item != null && (item.Status == "失败" || item.Status == "已暂停" ||
                 item.Status == "已取消");
             resume.Text = item != null && (item.Status == "已暂停" || item.Status == "已取消")
                 ? "继续此项" : "重试此项";
+        }
+
+        private void OpenCompletedItem(DownloadQueueItem item, bool folder)
+        {
+            if (item == null || item.Status != "已完成") return;
+            string path = item.FilePath;
+            if (String.IsNullOrWhiteSpace(path))
+            {
+                // Never guess which file to launch for legacy completed entries.
+                if (folder && Directory.Exists(item.OutputFolder))
+                {
+                    try { Process.Start(new ProcessStartInfo(item.OutputFolder) { UseShellExecute = true }); }
+                    catch (Exception ex) { ShowFileOpenError(ex.Message); }
+                    return;
+                }
+                ShowFileOpenError("未记录最终下载文件路径；旧任务可尝试“打开下载目录”。");
+                return;
+            }
+            if (!File.Exists(path))
+            {
+                ShowFileOpenError("文件不存在或已被移动：" + Environment.NewLine + path);
+                return;
+            }
+            try
+            {
+                if (folder)
+                    Process.Start(new ProcessStartInfo("explorer.exe")
+                    {
+                        Arguments = "/select," + (char)34 + path + (char)34,
+                        UseShellExecute = true
+                    });
+                else
+                    Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+            }
+            catch (Exception ex) { ShowFileOpenError(ex.Message); }
+        }
+
+        private void ShowFileOpenError(string message)
+        {
+            DarkMessageBox.Show(this, message, "dotSharK", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
         private void PauseQueueItem(DownloadQueueItem item)
@@ -818,17 +873,24 @@ namespace dotSharK
         private void ReportDownloadLine(DownloadQueueItem item, ItemDownloadProgress state, string lineText)
         {
             if (item == null || state == null || String.IsNullOrEmpty(lineText)) return;
+            if (lineText.StartsWith("dotSharKFile=", StringComparison.Ordinal))
+            {
+                string filename = lineText.Substring("dotSharKFile=".Length).Trim();
+                if (Path.IsPathRooted(filename) && filename.IndexOfAny(Path.GetInvalidPathChars()) < 0)
+                    item.FilePath = filename;
+                return;
+            }
             if (item.BrowserSilent && lineText.StartsWith("dotSharKTitle=", StringComparison.Ordinal))
             {
                 string title = lineText.Substring("dotSharKTitle=".Length).Trim();
                 if (title.Length > 0 && IsHandleCreated && !IsDisposed)
                 {
+                    item.Title = title;
                     try
                     {
                         BeginInvoke((Action)(() =>
                         {
                             if (IsDisposed || !queueItems.Contains(item)) return;
-                            item.Title = title;
                             UpdateQueueRow(item);
                         }));
                     }
@@ -930,12 +992,18 @@ namespace dotSharK
         private void AddQueueItem(DownloadQueueItem item)
         {
             queueItems.Add(item);
-            string quality = item.BrowserSilent ? "最高画质 · AV1 优先"
+            string quality = item.BrowserSilent ? (ytdlpOptions.SilentMaxHeight == 0 ? "最高画质 · AV1 优先" :
+                ytdlpOptions.SilentMaxHeight + "p 以内 · AV1 优先")
                 : item.AudioOnly ? "仅音频" : item.PlaylistItem
                 ? (item.TargetHeight > 0 ? item.TargetHeight + "p " + item.TargetCodec : "最高可用")
                 : (item.Video == null ? "自动" : item.Video.Label);
             string source = item.BrowserSilent ? "浏览器" : item.PlaylistItem ? "播放列表" : "单视频";
+            if (!String.IsNullOrWhiteSpace(item.DisplaySource)) source = item.DisplaySource;
+            else item.DisplaySource = source;
+            if (!String.IsNullOrWhiteSpace(item.DisplayQuality)) quality = item.DisplayQuality;
+            else item.DisplayQuality = quality;
             int row = queueGrid.Rows.Add(item.Title, source, quality, item.Status);
+            EnsureStatusWidth(item.Status);
             queueGrid.Rows[row].Tag = item; queueCountLabel.Text = "下载队列（" + queueItems.Count + "）"; UpdateQueueControls();
         }
         private void UpdateQueueRow(DownloadQueueItem item)
@@ -944,12 +1012,23 @@ namespace dotSharK
                 if (ReferenceEquals(row.Tag, item))
                 {
                     row.Cells[0].Value = item.Title;
-                    row.Cells[3].Value = item.Status == "下载中" && item.ProgressPercent > 0
+                    string status = item.Status == "下载中" && item.ProgressPercent > 0
                         ? "下载中 " + item.ProgressPercent.ToString("0.#", CultureInfo.InvariantCulture) + "%"
                         : item.Status;
+                    row.Cells[3].Value = status;
+                    EnsureStatusWidth(status);
                     break;
                 }
         }
+        private void EnsureStatusWidth(string status)
+        {
+            // Custom painted cell has 12px text insets on both sides.
+            int required = TextRenderer.MeasureText(status ?? "", queueGrid.Font, Size.Empty,
+                TextFormatFlags.NoPadding).Width + Theme.Space24 + Theme.Space8;
+            if (queueGrid.Columns["status"].Width < required)
+                queueGrid.Columns["status"].Width = required;
+        }
+
         private void UpdateQueueControls()
         {
             if (queueCountLabel != null) queueCountLabel.Text = "下载队列（" + queueItems.Count + "）";
@@ -975,6 +1054,7 @@ namespace dotSharK
                 if (!row.IsNewRow) queueGrid.Rows.Remove(row);
             }
             UpdateQueueControls();
+            PersistCompletedQueue();
         }
         private void ClearFinishedQueueItems()
         {
@@ -989,6 +1069,7 @@ namespace dotSharK
                 }
             }
             UpdateQueueControls();
+            PersistCompletedQueue();
         }
         private void AppendLog(string text)
         {
@@ -1054,7 +1135,7 @@ namespace dotSharK
                     aria2cPath = ExistingOrDefault(d.Aria2cPath, "aria2c.exe");
                     ytdlpOptions = d.Options;
                     ytdlpOptions.Aria2cPath = aria2cPath;
-                    RefreshClient(); SaveSettings();
+                    RefreshClient(); SaveSettings(); PersistCompletedQueue();
                     SetState(client == null ? "尚未指定 yt-dlp.exe。" : "配置已保存 · " + Path.GetFileName(ytDlpPath));
                 }
         }
@@ -1096,6 +1177,8 @@ namespace dotSharK
                         else if (key == "aria2c-sites") ytdlpOptions.Aria2cSites = value;
                         else if (key == "no-proxy-sites") ytdlpOptions.NoProxySites = value;
                         else if (key == "custom-args") ytdlpOptions.CustomArguments = value;
+                        else if (key == "keep-completed") ytdlpOptions.KeepCompletedTasks = value == "1";
+                        else if (key == "silent-max-height") { int h; if (Int32.TryParse(value, out h) && (h == 0 || h == 4320 || h == 2160 || h == 1080 || h == 720)) ytdlpOptions.SilentMaxHeight = h; }
                         else if (key == "proxy-enabled") ytdlpOptions.ProxyEnabled = value != "0";
                         else if (key == "geo-proxy-enabled") ytdlpOptions.GeoProxyEnabled = value != "0";
                         else if (key == "fragments") { int n; if (Int32.TryParse(value, out n)) ytdlpOptions.ConcurrentFragments = Math.Max(1, Math.Min(32, n)); }
@@ -1134,6 +1217,8 @@ namespace dotSharK
                     "aria2c-sites=" + Uri.EscapeDataString(ytdlpOptions.Aria2cSites ?? ""),
                     "no-proxy-sites=" + Uri.EscapeDataString(ytdlpOptions.NoProxySites ?? ""),
                     "custom-args=" + Uri.EscapeDataString(ytdlpOptions.CustomArguments ?? ""),
+                    "keep-completed=" + (ytdlpOptions.KeepCompletedTasks ? "1" : "0"),
+                    "silent-max-height=" + ytdlpOptions.SilentMaxHeight,
                     "fragments=" + ytdlpOptions.ConcurrentFragments, "downloads=" + Math.Max(1, Math.Min(6, ytdlpOptions.ConcurrentDownloads)),
                     "video-quality-limit=" + ytdlpOptions.VideoQualityLimit,
                     "silent-folder=" + Uri.EscapeDataString(ytdlpOptions.SilentDownloadFolder ?? ""),
@@ -1147,7 +1232,28 @@ namespace dotSharK
             }
             catch { }
         }
-        protected override void OnFormClosing(FormClosingEventArgs e) { SaveSettings(); base.OnFormClosing(e); }
+        private void LoadCompletedQueue()
+        {
+            if (!ytdlpOptions.KeepCompletedTasks) return;
+            try
+            {
+                foreach (DownloadQueueItem item in CompletedQueueStore.Load(completedPath)) AddQueueItem(item);
+            }
+            catch (Exception ex) { AppendLog("[记录] 无法恢复已完成任务：" + ex.Message); }
+        }
+
+        private void PersistCompletedQueue()
+        {
+            try { CompletedQueueStore.Save(completedPath,
+                ytdlpOptions.KeepCompletedTasks ? queueItems.Where(x => x.Status == "已完成") :
+                    Enumerable.Empty<DownloadQueueItem>()); }
+            catch (Exception ex) { AppendLog("[记录] 保存完成任务失败：" + ex.Message); }
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            SaveSettings(); PersistCompletedQueue(); base.OnFormClosing(e);
+        }
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
             clipboardWatchTimer.Stop();
