@@ -156,23 +156,31 @@ namespace dotSharK
             queueGrid.Columns.Add(new DataGridViewTextBoxColumn { Name = "status", HeaderText = "状态", FillWeight = 9 });
             queueGrid.SelectionChanged += (s, e) => UpdateQueueControls();
             var queueMenu = new ContextMenuStrip { BackColor = DarkPalette.Surface, ForeColor = fg, ShowImageMargin = false, Renderer = new DarkContextMenuRenderer() };
-            var retryOneMenuItem = new ToolStripMenuItem("重试此项");
+            var pauseOneMenuItem = new ToolStripMenuItem("暂停此项");
+            var retryOneMenuItem = new ToolStripMenuItem("继续/重试此项");
+            queueMenu.Items.Add(pauseOneMenuItem);
             queueMenu.Items.Add(retryOneMenuItem);
             DownloadQueueItem contextItem = null;
             queueGrid.CellMouseDown += (s, e) =>
             {
-                if (e.Button == MouseButtons.Right)
+                if (e.Button != MouseButtons.Right) return;
+                contextItem = null;
+                if (e.RowIndex >= 0)
                 {
-                    contextItem = null;
-                    if (e.RowIndex >= 0)
-                    {
-                        queueGrid.ClearSelection(); queueGrid.Rows[e.RowIndex].Selected = true;
-                        contextItem = queueGrid.Rows[e.RowIndex].Tag as DownloadQueueItem;
-                    }
-                    retryOneMenuItem.Enabled = !downloadRunning && contextItem != null && contextItem.Status == "失败";
+                    queueGrid.ClearSelection(); queueGrid.Rows[e.RowIndex].Selected = true;
+                    contextItem = queueGrid.Rows[e.RowIndex].Tag as DownloadQueueItem;
                 }
+                UpdateItemContextActions(contextItem, pauseOneMenuItem, retryOneMenuItem);
             };
-            retryOneMenuItem.Click += async (s, e) => { if (contextItem != null && contextItem.Status == "失败" && ValidProxy()) { contextItem.Status = "等待中"; UpdateQueueRow(contextItem); UpdateQueueControls(); await DownloadQueue(); } };
+            queueMenu.Opening += (s, e) =>
+            {
+                if (contextItem == null || !queueItems.Contains(contextItem))
+                    contextItem = queueGrid.SelectedRows.Count > 0
+                        ? queueGrid.SelectedRows[0].Tag as DownloadQueueItem : null;
+                UpdateItemContextActions(contextItem, pauseOneMenuItem, retryOneMenuItem);
+            };
+            pauseOneMenuItem.Click += (s, e) => PauseQueueItem(contextItem);
+            retryOneMenuItem.Click += (s, e) => ResumeQueueItem(contextItem);
             queueGrid.ContextMenuStrip = queueMenu;
             queueArea.Controls.Add(queueGrid, 0, 1); root.Controls.Add(queueArea, 0, 2);
             NativeDarkTheme.ApplyOnHandleCreated(queueGrid, "DarkMode_Explorer"); NativeDarkTheme.ApplyScrollBarsOnHandleCreated(queueGrid, "DarkMode_Explorer");
@@ -467,6 +475,51 @@ namespace dotSharK
             AppendLog("[队列] 收到停止请求，正在终止当前 yt-dlp 任务。");
             UpdateQueueControls();
             if (queueCancellation != null) queueCancellation.Cancel();
+        }
+
+        private void UpdateItemContextActions(DownloadQueueItem item, ToolStripMenuItem pause, ToolStripMenuItem resume)
+        {
+            pause.Enabled = item != null && (item.Status == "等待中" || item.Status == "下载中");
+            resume.Enabled = item != null && (item.Status == "失败" || item.Status == "已暂停" ||
+                item.Status == "已取消");
+            resume.Text = item != null && (item.Status == "已暂停" || item.Status == "已取消")
+                ? "继续此项" : "重试此项";
+        }
+
+        private void PauseQueueItem(DownloadQueueItem item)
+        {
+            if (item == null || !(item.Status == "等待中" || item.Status == "下载中")) return;
+            item.PauseRequested = true;
+            CancellationTokenSource source;
+            if (itemCancellation.TryGetValue(item, out source))
+            {
+                item.Status = "暂停中";
+                source.Cancel();
+            }
+            else item.Status = "已暂停";
+            UpdateQueueRow(item);
+            UpdateQueueControls();
+            AppendLog("[单项暂停] " + item.Title);
+        }
+
+        private void ResumeQueueItem(DownloadQueueItem item)
+        {
+            if (item == null || !(item.Status == "失败" || item.Status == "已暂停" || item.Status == "已取消"))
+                return;
+            if (!ValidProxy()) return;
+            item.PauseRequested = false;
+            item.ProgressPercent = 0;
+            item.Status = "等待中";
+            UpdateQueueRow(item);
+            UpdateQueueControls();
+            AppendLog("[继续/重试] " + item.Title);
+            if (downloadRunning)
+            {
+                // The running batch has an immutable snapshot. Run newly resumed
+                // jobs in the next batch without restarting the active transfers.
+                browserAutoRunRequested = true;
+            }
+            else { var run = DownloadQueue(); }
         }
 
         private async Task RetryAllFailed()
