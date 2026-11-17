@@ -72,7 +72,7 @@ namespace dotSharK
                                 mainWindow.Visible && mainWindow.WindowState == FormWindowState.Minimized)
                             {
                                 TraceState("Native minimize fallback");
-                                mainWindow.Hide();
+                                HideMainWindow("WM_SIZE_MINIMIZED");
                             }
                         }));
                 }
