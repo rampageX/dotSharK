@@ -83,6 +83,12 @@ namespace dotSharK
             entry.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); entry.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104));
             entry.RowStyles.Add(new RowStyle(SizeType.Absolute, DarkPalette.ControlHeight));
             urlBox = InputBox(); urlBox.Dock = DockStyle.Fill; urlBox.Margin = Padding.Empty; urlBox.Text = "";
+            // Stop the prompt immediately when the user pastes the clipboard URL manually.
+            urlBox.TextChanged += (s, e) =>
+            {
+                if (AddressContainsClipboardLink(clipboardCandidateUrl, urlBox.Text))
+                    ClearClipboardAttention();
+            };
             analyzeButton = AccentButton("分析链接"); analyzeButton.Dock = DockStyle.Fill; analyzeButton.Click += async (s, e) => await AnalyzeFromButton();
             entry.Controls.Add(urlBox, 0, 0); entry.Controls.Add(analyzeButton, 1, 0);
             root.Controls.Add(entry, 0, 1);
@@ -165,7 +171,7 @@ namespace dotSharK
             }
 
             string candidate = ReadClipboardCandidate();
-            if (candidate == null)
+            if (candidate == null || AddressContainsClipboardLink(candidate, urlBox.Text))
             {
                 ClearClipboardAttention();
                 return;
@@ -178,6 +184,13 @@ namespace dotSharK
             }
             else clipboardFlashBright = !clipboardFlashBright;
             analyzeButton.AttentionHighlight = clipboardFlashBright;
+        }
+
+        internal static bool AddressContainsClipboardLink(string clipboardUrl, string addressText)
+        {
+            string address = NormalizeDownloadLink(addressText);
+            return clipboardUrl != null && address != null &&
+                String.Equals(clipboardUrl, address, StringComparison.Ordinal);
         }
 
         private void ClearClipboardAttention()
