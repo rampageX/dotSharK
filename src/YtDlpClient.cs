@@ -157,6 +157,30 @@ namespace dotSharK
             if (result.ExitCode != 0) throw new InvalidOperationException(UsefulError(result.Stderr, result.ExitCode));
         }
 
+        // Headless browser queue: highest resolution and FPS first, then HDR and AV1.
+        // No fixed format ID, quality cap or container restriction. Always one page video.
+        internal async Task DownloadSilentAsync(string url, string folder, string archivePath,
+            YtDlpOptions options, Action<string> output)
+        {
+            var args = CommonArguments(options, true);
+            args.AddRange(new[] {
+                "--no-playlist", "--playlist-items", "1", "--newline", "--progress",
+                "-P", folder, "-o", "%(title)s [%(id)s].%(ext)s",
+                "--download-archive", archivePath,
+                "-f", "bv*+ba/b", "--format-sort-force",
+                "-S", "res,fps,hdr,vcodec,br"
+            });
+            if (!String.IsNullOrWhiteSpace(FfmpegPath) && String.IsNullOrWhiteSpace(FfprobePath))
+            {
+                args.Add("--ffmpeg-location");
+                args.Add(FfmpegPath);
+            }
+            args.Add(url);
+            var result = await RunStreamingAsync(args, output, CancellationToken.None);
+            if (result.ExitCode != 0)
+                throw new InvalidOperationException(UsefulError(result.Stderr, result.ExitCode));
+        }
+
         public async Task DownloadPlaylistItemAsync(DownloadQueueItem item, YtDlpOptions options, Action<string> output, CancellationToken cancellationToken)
         {
             if (item == null || String.IsNullOrWhiteSpace(item.Url)) throw new InvalidOperationException("播放列表项目网址为空。");
