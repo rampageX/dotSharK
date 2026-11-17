@@ -394,6 +394,7 @@ namespace dotSharK
 
         private static bool HasValue(string arg)
         {
+            if (String.Equals(arg, "--no-cookies", StringComparison.OrdinalIgnoreCase)) return false;
             string key = CanonicalSwitch(arg);
             return key == "--format" || key == "--format-sort" || key == "--paths" || key == "--output" ||
                 key == "--proxy" || key == "--geo-verification-proxy" || key == "--cookies" ||
