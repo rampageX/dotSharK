@@ -180,7 +180,7 @@ namespace dotSharK
         }
 
         // Browser download only; normal queued video quality is unchanged.
-        internal async Task DownloadSilentAsync(string url, string folder, string archivePath,
+        internal async Task<bool> DownloadSilentAsync(string url, string folder, string archivePath,
             YtDlpOptions options, Action<string> output, CancellationToken cancellationToken)
         {
             var args = CommonArguments(options, true);
@@ -200,9 +200,35 @@ namespace dotSharK
             }
             args.Add(url);
             AddAria2cAndOverrides(args, options, url);
-            var result = await RunStreamingAsync(args, output, cancellationToken);
+            // --print implies quiet; keep archive skips and extractor diagnostics visible.
+            args.Insert(args.Count - 1, "--no-quiet");
+            bool skipped = false;
+            string finalPath = null;
+            Action<string> observe = line =>
+            {
+                if (line.IndexOf("has already been recorded in the archive", StringComparison.OrdinalIgnoreCase) >= 0)
+                    skipped = true;
+                const string prefix = "dotSharKFileJson=";
+                if (line.StartsWith(prefix, StringComparison.Ordinal))
+                {
+                    try { finalPath = new JavaScriptSerializer().Deserialize<string>(line.Substring(prefix.Length)); }
+                    catch (ArgumentException) { }
+                }
+                if (output != null) output(line);
+            };
+            if (output != null) output("[执行] 浏览器任务开始；已启用完整过程日志。");
+            var result = await RunStreamingAsync(args, observe, cancellationToken);
+            if (output != null) output("[退出] yt-dlp 退出码 " + result.ExitCode);
             if (result.ExitCode != 0)
                 throw new InvalidOperationException(UsefulError(result.Stderr, result.ExitCode));
+            if (skipped)
+            {
+                if (output != null) output("[跳过] 此视频已在下载档案中，本次没有重新下载。");
+                return true;
+            }
+            if (String.IsNullOrWhiteSpace(finalPath) || !File.Exists(finalPath))
+                throw new InvalidOperationException("yt-dlp 正常退出，但未返回实际存在的输出文件，也未报告档案跳过；请查看过程日志。");
+            return false;
         }
 
         public async Task DownloadPlaylistItemAsync(DownloadQueueItem item, YtDlpOptions options, Action<string> output, CancellationToken cancellationToken)

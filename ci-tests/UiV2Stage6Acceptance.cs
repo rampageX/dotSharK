@@ -416,6 +416,15 @@ internal static class UiV2Stage6Acceptance
                 CancellationToken.None);
             Pump(download, "silent yt-dlp local HTTP transfer");
             Check(Directory.GetFiles(silent, "*.mp4").Length == 1, "real silent download wrote MP4");
+            var skipLog = new List<string>();
+            var skippedTask = (Task)Invoke(client, "DownloadSilentAsync", server.Url, silent,
+                Path.Combine(folder, "archive.txt"), opt,
+                (Action<string>)(line => { lock (skipLog) skipLog.Add(line); }), CancellationToken.None);
+            Pump(skippedTask, "repeat archived URL");
+            Check((bool)skippedTask.GetType().GetProperty("Result").GetValue(skippedTask, null), "archive repeat returns explicit skip outcome");
+            Check(skipLog.Any(line => line.Contains("has already been recorded in the archive")), "archive skip diagnostics visible despite print metadata options");
+            Check(skipLog.Any(line => line.StartsWith("[跳过]")), "archive skip has readable Chinese explanation");
+
             using (var main = NewForm("MainFormV2"))
             {
                 Show(main);
