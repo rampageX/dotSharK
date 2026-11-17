@@ -352,36 +352,51 @@ namespace dotSharK
 
         private void BuildYtPage(Panel page)
         {
-            var grid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 12, BackColor = bg, Padding = new Padding(2) };
-            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 96)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 106));
-            for (int i = 0; i < 8; i++) grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
-            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
-            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-
-            grid.Controls.Add(StyledLabel("代理"), 0, 0);
-            proxyBox = StyledTextBox(Options.Proxy); SetBottomField(proxyBox, true, 0); grid.Controls.Add(proxyBox, 1, 0);
+            var grid = FormTable(12);
+            proxyBox = StyledTextBox(Options.Proxy);
+            proxyBox.Name = "txtProxy";
             proxyEnabledBox = StyledToggle("启用", Options.ProxyEnabled);
-            grid.Controls.Add(proxyEnabledBox, 2, 0);
-            grid.Controls.Add(StyledLabel("地域验证代理"), 0, 1);
-            geoProxyBox = StyledTextBox(Options.GeoVerificationProxy); SetBottomField(geoProxyBox, true, 0); grid.Controls.Add(geoProxyBox, 1, 1);
+            proxyEnabledBox.Name = "chkProxyEnabled";
+            SettingRow(grid, 0, "代理", Row(Fill(proxyBox),
+                Fixed(Theme.Space8), Fixed(Theme.Space24 * 2 + Theme.Space16, proxyEnabledBox)));
+
+            geoProxyBox = StyledTextBox(Options.GeoVerificationProxy);
+            geoProxyBox.Name = "txtGeoProxy";
             geoProxyEnabledBox = StyledToggle("启用", Options.GeoProxyEnabled);
-            var geoTip = new ToolTip();
-            geoTip.SetToolTip(geoProxyEnabledBox, "仅用于 yt-dlp 地区验证；关闭时保留地址，不传给 yt-dlp。");
-            geoTip.SetToolTip(geoProxyBox, "仅用于 yt-dlp 地区验证；关闭时保留地址，不传给 yt-dlp。");
-            grid.Controls.Add(geoProxyEnabledBox, 2, 1);
-            grid.Controls.Add(StyledLabel("分片并发"), 0, 2);
-            fragmentsBox = new DarkNumericUpDown { Minimum = 1, Maximum = 32, Value = Math.Max(1, Math.Min(32, Options.ConcurrentFragments)), Width = 116, Height = DarkPalette.ControlHeight, Margin = Padding.Empty, Anchor = AnchorStyles.Left | AnchorStyles.Bottom, BackColor = field, ForeColor = fg, BorderStyle = BorderStyle.FixedSingle, TextAlign = HorizontalAlignment.Center };
-            grid.Controls.Add(fragmentsBox, 1, 2);
-            grid.Controls.Add(new Label { Text = "下载分片并发数", ForeColor = muted, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 2, 2);
+            geoProxyEnabledBox.Name = "chkGeoProxyEnabled";
+            v2ToolTips.SetToolTip(geoProxyEnabledBox,
+                "仅用于 yt-dlp 地区验证；关闭时保留地址，不传给 yt-dlp。");
+            v2ToolTips.SetToolTip(geoProxyBox,
+                "仅用于 yt-dlp 地区验证；关闭时保留地址，不传给 yt-dlp。");
+            SettingRow(grid, 1, "地域验证代理", Row(Fill(geoProxyBox),
+                Fixed(Theme.Space8), Fixed(Theme.Space24 * 2 + Theme.Space16, geoProxyEnabledBox)));
 
-            grid.Controls.Add(StyledLabel("同时下载数"), 0, 3);
-            downloadsBox = new DarkNumericUpDown { Minimum = 1, Maximum = 6, Value = Math.Max(1, Math.Min(6, Options.ConcurrentDownloads)), Width = 116, Height = DarkPalette.ControlHeight, Margin = Padding.Empty, Anchor = AnchorStyles.Left | AnchorStyles.Bottom, BackColor = field, ForeColor = fg, BorderStyle = BorderStyle.FixedSingle, TextAlign = HorizontalAlignment.Center };
-            grid.Controls.Add(downloadsBox, 1, 3);
-            grid.Controls.Add(new Label { Text = "队列同时运行的视频数（1–6）", ForeColor = muted, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 2, 3);
+            fragmentsBox = new DarkNumeric
+            {
+                Name = "numFragments", Minimum = 1, Maximum = 32,
+                Value = Math.Max(1, Math.Min(32, Options.ConcurrentFragments)),
+                Width = Theme.NumericWidth, Height = Theme.ControlHeight
+            };
+            SettingRow(grid, 2, "分片并发", Row(
+                Fixed(Theme.NumericWidth, fragmentsBox), Fixed(Theme.Space12),
+                Fill(Note("下载分片并发数"))));
 
-            grid.Controls.Add(StyledLabel("Cookie 来源"), 0, 4);
-            sourceBox = StyledCombo(new[] { "浏览器", "Cookie 文件" }); sourceBox.SelectedIndex = Options.CookieMode == "file" ? 1 : 0; sourceBox.Width = 150; sourceBox.Anchor = AnchorStyles.Left | AnchorStyles.Bottom; grid.Controls.Add(sourceBox, 1, 4);
-            grid.Controls.Add(StyledLabel("浏览器"), 0, 5);
+            downloadsBox = new DarkNumeric
+            {
+                Name = "numConcurrentDownloads", Minimum = 1, Maximum = 6,
+                Value = Math.Max(1, Math.Min(6, Options.ConcurrentDownloads)),
+                Width = Theme.NumericWidth, Height = Theme.ControlHeight
+            };
+            SettingRow(grid, 3, "同时下载数", Row(
+                Fixed(Theme.NumericWidth, downloadsBox), Fixed(Theme.Space12),
+                Fill(Note("队列同时运行的视频数（1–6）"))));
+
+            sourceBox = StyledCombo(new object[] { "浏览器", "Cookie 文件" });
+            sourceBox.Name = "cboCookieSource";
+            sourceBox.SelectedIndex = Options.CookieMode == "file" ? 1 : 0;
+            SettingRow(grid, 4, "Cookie 来源", Row(
+                Fixed(Theme.Space24 * 8 + Theme.Space8, sourceBox), Fill(null)));
+
             var browsers = new[] {
                 new BrowserOption { Name="firefox", Label="Firefox" }, new BrowserOption { Name="chrome", Label="Chrome" },
                 new BrowserOption { Name="edge", Label="Edge" }, new BrowserOption { Name="brave", Label="Brave" },
@@ -389,43 +404,77 @@ namespace dotSharK
                 new BrowserOption { Name="vivaldi", Label="Vivaldi" }, new BrowserOption { Name="safari", Label="Safari" },
                 new BrowserOption { Name="whale", Label="Whale" }
             };
-            browserBox = StyledCombo(browsers.Cast<object>().ToArray()); browserBox.Width = 190; browserBox.Anchor = AnchorStyles.Left | AnchorStyles.Bottom; grid.Controls.Add(browserBox, 1, 5);
+            browserBox = StyledCombo(browsers.Cast<object>().ToArray());
+            browserBox.Name = "cboBrowser";
             string browserName = String.IsNullOrWhiteSpace(Options.CookieBrowser) ? "firefox" : Options.CookieBrowser;
-            for (int i = 0; i < browserBox.Items.Count; i++) if (((BrowserOption)browserBox.Items[i]).Name == browserName) browserBox.SelectedIndex = i;
+            for (int i = 0; i < browserBox.Items.Count; i++)
+                if (((BrowserOption)browserBox.Items[i]).Name == browserName)
+                    browserBox.SelectedIndex = i;
+            SettingRow(grid, 5, "浏览器", Row(
+                Fixed(Theme.Space24 * 8 + Theme.Space8, browserBox), Fill(null)));
 
-            grid.Controls.Add(StyledLabel("搜索目录"), 0, 6);
-            profileRootBox = StyledTextBox(Options.CookieProfileRoot); SetBottomField(profileRootBox, true, 8); grid.Controls.Add(profileRootBox, 1, 6);
-            var rootButtons = new TableLayoutPanel { ColumnCount = 2, RowCount = 1, BackColor = bg, Height = DarkPalette.ControlHeight, Margin = Padding.Empty, Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom };
-            rootButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50)); rootButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-            var rootBrowse = StyledButton("选择", false); rootBrowse.Dock = DockStyle.Fill; rootBrowse.Margin = new Padding(0, 0, 3, 0); rootBrowse.Click += BrowseProfileRoot;
-            profileSearchButton = StyledButton("搜索", true); profileSearchButton.Dock = DockStyle.Fill; profileSearchButton.Margin = new Padding(3, 0, 0, 0); profileSearchButton.Click += async (s, e) => await SearchProfiles();
-            rootButtons.Controls.Add(rootBrowse, 0, 0); rootButtons.Controls.Add(profileSearchButton, 1, 0); grid.Controls.Add(rootButtons, 2, 6);
+            profileRootBox = StyledTextBox(Options.CookieProfileRoot);
+            profileRootBox.Name = "txtProfileRoot";
+            var rootBrowse = StyledButton("选择", false);
+            rootBrowse.Name = "btnBrowseProfileRoot";
+            rootBrowse.Click += BrowseProfileRoot;
+            profileSearchButton = StyledButton("搜索", true);
+            profileSearchButton.Name = "btnSearchProfiles";
+            profileSearchButton.Click += async (s, e) => await SearchProfiles();
+            // Equal 80px browse/search buttons, with a shared 8px gap.
+            SettingRow(grid, 6, "搜索目录", Row(
+                Fill(profileRootBox), Fixed(Theme.Space8),
+                Fixed(Theme.BrowseButtonWidth, rootBrowse), Fixed(Theme.Space8),
+                Fixed(Theme.BrowseButtonWidth, profileSearchButton)));
 
-            grid.Controls.Add(StyledLabel("浏览器配置"), 0, 7);
-            var profileRow = new TableLayoutPanel { ColumnCount = 2, RowCount = 1, BackColor = bg, Height = DarkPalette.ControlHeight, Margin = Padding.Empty, Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom };
-            profileRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); profileRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 34));
-            profileBox = StyledCombo(new object[0]); profileBox.DropDownStyle = ComboBoxStyle.DropDown; profileBox.Dock = DockStyle.Fill; profileBox.Margin = new Padding(0, 0, 5, 0); profileRow.Controls.Add(profileBox, 0, 0);
-            profileFoundCheck = new Label { Text = "", ForeColor = green, Font = new Font("Segoe UI Symbol", 14F, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Visible = false, BackColor = bg };
-            profileRow.Controls.Add(profileFoundCheck, 1, 0); grid.Controls.Add(profileRow, 1, 7); grid.SetColumnSpan(profileRow, 2);
-            if (!String.IsNullOrWhiteSpace(Options.CookieProfile)) { profileBox.Text = Options.CookieProfile; profileBox.Items.Add(Options.CookieProfile); }
-            profileStatus = new Label { Text = "默认浏览器配置自动读取；指定目录后可递归搜寻 Cookie 数据库。", ForeColor = muted, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
-            grid.Controls.Add(profileStatus, 1, 8); grid.SetColumnSpan(profileStatus, 2);
-            grid.Controls.Add(StyledLabel("Cookie 文件"), 0, 9);
-            cookieFileBox = StyledTextBox(Options.CookieFile); SetBottomField(cookieFileBox, true, 8); grid.Controls.Add(cookieFileBox, 1, 9);
-            var cookieBrowse = StyledButton("浏览…", false); SetBottomField(cookieBrowse, true, 0); cookieBrowse.Click += BrowseCookieFile; grid.Controls.Add(cookieBrowse, 2, 9);
-            grid.Controls.Add(StyledLabel("视频质量限制"), 0, 10);
-            // Use the same centered label style as all other settings; avoid FlowLayoutPanel's top padding.
-            var qualityLimitRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty, Padding = Padding.Empty, BackColor = bg };
-            qualityLimitRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 32));
-            qualityLimitRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100));
-            qualityLimitRow.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            var qualityPrefix = StyledLabel("前："); qualityPrefix.Margin = Padding.Empty;
-            qualityLimitRow.Controls.Add(qualityPrefix, 0, 0);
-            qualityLimitBox = new DarkNumericUpDown { Minimum = 0, Maximum = 9999, Value = Math.Max(0, Math.Min(9999, Options.VideoQualityLimit)), Width = 96, Height = DarkPalette.ControlHeight, Margin = Padding.Empty, Anchor = AnchorStyles.Left, BackColor = field, ForeColor = fg, BorderStyle = BorderStyle.FixedSingle, TextAlign = HorizontalAlignment.Center };
-            qualityLimitRow.Controls.Add(qualityLimitBox, 1, 0); grid.Controls.Add(qualityLimitRow, 1, 10);
-            var qualityHint = new Label { Text = "默认前三个不同分辨率档位；0 为不限制。同分辨率的不同编码、HDR 选项均保留。", ForeColor = muted, Dock = DockStyle.Fill, TextAlign = ContentAlignment.TopLeft, Padding = new Padding(0, 5, 0, 0), AutoEllipsis = true };
-            grid.Controls.Add(qualityHint, 1, 11); grid.SetColumnSpan(qualityHint, 2);
-            page.Controls.Add(grid);
+            profileBox = StyledCombo(new object[0]);
+            profileBox.Name = "cboBrowserProfile";
+            profileBox.DropDownStyle = ComboBoxStyle.DropDown;
+            profileFoundCheck = Label("");
+            profileFoundCheck.Name = "lblProfileFound";
+            profileFoundCheck.Font = Theme.HeadingFont;
+            profileFoundCheck.ForeColor = green;
+            profileFoundCheck.TextAlign = ContentAlignment.MiddleCenter;
+            profileFoundCheck.Visible = false;
+            SettingRow(grid, 7, "浏览器配置", Row(
+                Fill(profileBox), Fixed(Theme.Space8),
+                Fixed(Theme.Space24, profileFoundCheck)));
+            if (!String.IsNullOrWhiteSpace(Options.CookieProfile))
+            {
+                profileBox.Items.Add(Options.CookieProfile);
+                profileBox.Text = Options.CookieProfile;
+            }
+            profileStatus = Note("默认浏览器配置自动读取；指定目录后可递归搜寻 Cookie 数据库。");
+            profileStatus.Name = "lblProfileStatus";
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute,
+                Theme.ControlHeight + Theme.Space12));
+            grid.Controls.Add(profileStatus, 1, 8);
+
+            cookieFileBox = StyledTextBox(Options.CookieFile);
+            cookieFileBox.Name = "txtCookieFile";
+            var cookieBrowse = StyledButton("浏览…", false);
+            cookieBrowse.Name = "btnBrowseCookieFile";
+            cookieBrowse.Click += BrowseCookieFile;
+            SettingRow(grid, 9, "Cookie 文件", Row(
+                Fill(cookieFileBox), Fixed(Theme.Space8),
+                Fixed(Theme.BrowseButtonWidth, cookieBrowse)));
+
+            qualityLimitBox = new DarkNumeric
+            {
+                Name = "numVideoQualityLimit", Minimum = 0, Maximum = 9999,
+                Value = Math.Max(0, Math.Min(9999, Options.VideoQualityLimit)),
+                Width = Theme.FullNumericWidth, Height = Theme.ControlHeight
+            };
+            SettingRow(grid, 10, "视频质量限制", Row(
+                Fixed(Theme.Space24 + Theme.Space8, Label("前：")),
+                Fixed(Theme.FullNumericWidth, qualityLimitBox),
+                Fill(null)));
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute,
+                Theme.ControlHeight + Theme.Space12));
+            grid.Controls.Add(Note("默认前三个不同分辨率档位；0 为不限制。同分辨率的不同编码、HDR 选项均保留。"), 1, 11);
+            Scrolled(page, grid);
+
+            // Keep the original async search and save event handlers unchanged.
             sourceBox.SelectedIndexChanged += async (s, e) =>
             {
                 UpdateCookieMode();
@@ -437,9 +486,11 @@ namespace dotSharK
                 profileSearchGeneration++; profileBox.Items.Clear(); profileBox.Text = ""; SetProfileFound(false);
                 if (sourceBox.SelectedIndex == 0) await SearchDefaultBrowserProfiles();
             };
-            profileBox.SelectedIndexChanged += (s, e) => SetProfileFound(profileBox.SelectedIndex >= 0);
+            profileBox.SelectedIndexChanged += (s, e) =>
+                SetProfileFound(profileBox.SelectedIndex >= 0);
             UpdateCookieMode();
-            if (sourceBox.SelectedIndex == 0) Shown += async (s, e) => await SearchDefaultBrowserProfiles();
+            if (sourceBox.SelectedIndex == 0)
+                Shown += async (s, e) => await SearchDefaultBrowserProfiles();
         }
 
         private void BuildSilentPage(Panel page)
