@@ -34,7 +34,14 @@ namespace dotSharK.UiV2
                 editor.WordWrap = true;
                 editor.ScrollBars = System.Windows.Forms.ScrollBars.None;
                 editor.Dock = DockStyle.Fill;
-                scrollbar = new DarkScrollBar { Dock = DockStyle.Right };
+                // Do not reserve a scrollbar column until content truly
+                // exceeds the visible number of (wrapped) text lines.
+                scrollbar = new DarkScrollBar
+                {
+                    Dock = DockStyle.Right,
+                    Visible = false,
+                    Enabled = false
+                };
                 Controls.Add(scrollbar);
                 scrollbar.BringToFront();
                 scrollbar.ValueChanged += (s, e) => ScrollToLine(scrollbar.Value);
@@ -92,9 +99,15 @@ namespace dotSharK.UiV2
                 int display = Math.Max(1, editor.ClientSize.Height /
                     Math.Max(1, TextRenderer.MeasureText("Ag", editor.Font).Height));
                 int lines = NativeLineCount;
+                int maximum = Math.Max(0, lines - display);
                 scrollbar.LargeChange = display;
-                scrollbar.Maximum = Math.Max(0, lines - display);
-                scrollbar.Value = Math.Max(0, Math.Min(scrollbar.Maximum, NativeTopLine));
+                scrollbar.Maximum = maximum;
+                scrollbar.Value = Math.Max(0, Math.Min(maximum, NativeTopLine));
+                bool needed = maximum > 0;
+                // Visibility changes relayout the native TextBox: on an
+                // empty/single-line editor, no gray track should be drawn.
+                if (scrollbar.Visible != needed) scrollbar.Visible = needed;
+                scrollbar.Enabled = needed;
             }
             finally { updating = false; }
         }
