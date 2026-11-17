@@ -65,13 +65,15 @@ namespace dotSharK
             {
                 Text = "dotSharK 配置";
                 StartPosition = FormStartPosition.CenterParent;
-                FormBorderStyle = FormBorderStyle.FixedDialog;
-                MaximizeBox = false; MinimizeBox = false; ShowInTaskbar = false;
+                // Keep every page visible without a dialog-level scroll bar.
+                // Resizing is allowed; the minimum protects the longest YT-DLP page.
+                FormBorderStyle = FormBorderStyle.Sizable;
+                MaximizeBox = true; MinimizeBox = false; ShowInTaskbar = false;
                 Icon = AppBranding.CreateIcon();
                 BackColor = Theme.Window; ForeColor = Theme.PrimaryText;
                 Font = Theme.BodyFont;
                 ClientSize = Theme.SettingsClientSize;
-                MinimumSize = Size; MaximumSize = Size;
+                MinimumSize = Theme.SettingsMinimumSize;
                 var root = new TableLayoutPanel
                 {
                     Name = "layoutSettingsRoot", Dock = DockStyle.Fill,
@@ -232,12 +234,15 @@ namespace dotSharK
             }
             return t;
         }
-        private static SettingsScrollHost Scrolled(Panel page, Control body)
+        // No page-level scrolling. All rows remain visible at the window's
+        // minimum size; resizing expands the flexible control column only.
+        private static void MountPage(Panel page, Control body)
         {
-            var host = new SettingsScrollHost
-            { Dock = DockStyle.Fill, Margin = Padding.Empty, Content = body };
-            page.Controls.Add(host);
-            return host;
+            var table = body as TableLayoutPanel;
+            if (table != null) table.AutoSize = false;
+            body.Dock = DockStyle.Fill;
+            body.Margin = Padding.Empty;
+            page.Controls.Add(body);
         }
 
         private void BuildToolsPage(Panel page, string[] values)
@@ -300,7 +305,7 @@ namespace dotSharK
             content.Controls.Add(toolUpdateStatus, 0, 6);
             content.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space12 * 5));
             content.Controls.Add(Note("路径保存在 dotSharK.ini 中。浏览按钮只选择路径；在线更新会先下载到临时位置并验证版本，再替换目标文件。FFmpeg 稳定版来自 Gyan Builds，Nightly 来自 BtbN FFmpeg Builds。"), 0, 7);
-            Scrolled(page, content);
+            MountPage(page, content);
         }
 
         private async Task UpdateToolAsync(int toolIndex, bool nightly)
@@ -498,7 +503,7 @@ namespace dotSharK
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute,
                 Theme.ControlHeight + Theme.Space12));
             grid.Controls.Add(SpacedRow(Note("默认前三个不同分辨率档位；0 为不限制。同分辨率的不同编码、HDR 选项均保留。")), 1, 11);
-            Scrolled(page, grid);
+            MountPage(page, grid);
 
             // Keep the original async search and save event handlers unchanged.
             sourceBox.SelectedIndexChanged += async (s, e) =>
@@ -561,7 +566,7 @@ namespace dotSharK
                     "只影响浏览器右键“发送到 dotSharK”下载。主窗口的“保存到”保持独立。" +
                     Environment.NewLine +
                     "最高分辨率 / 最高帧率 / HDR / AV1 优先；按已保存的 yt-dlp 代理和 Cookie 下载，不弹窗口。"))), 0, 4);
-            Scrolled(page, content);
+            MountPage(page, content);
         }
 
         private DarkCheckBox StyledToggle(string title, bool isChecked)
@@ -624,7 +629,7 @@ namespace dotSharK
                 "无代理站点规则优先于自定义代理参数。aria2c.exe 在「外部工具」页指定。");
             root.Controls.Add(hint, 0, 6);
             root.SetColumnSpan(hint, 3);
-            Scrolled(page, root);
+            MountPage(page, root);
         }
 
         private void UpdateCookieMode()
