@@ -9,6 +9,7 @@ namespace dotSharK
         public string GeoVerificationProxy = "";
         public int ConcurrentFragments = 8;
         public int ConcurrentDownloads = 3;
+        public int VideoQualityLimit = 3; // Distinct resolution tiers; 0 = show all.
         public string CookieMode = "browser";
         public string CookieBrowser = "firefox";
         public string CookieProfileRoot = "";
