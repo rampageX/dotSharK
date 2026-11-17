@@ -6,8 +6,20 @@ namespace dotSharK
     internal static class Program
     {
         [STAThread]
-        private static void Main()
+        private static void Main(string[] args)
         {
+            // Chromium passes the extension origin as the native host's first argument.
+            // Do not initialize WinForms for either fully silent entry point.
+            if (SilentDownloadBridge.IsNativeHostCall(args))
+            {
+                SilentDownloadBridge.RunNativeHost();
+                return;
+            }
+            if (args != null && args.Length == 1 && args[0] == "--silent-worker")
+            {
+                SilentDownloadBridge.RunWorker();
+                return;
+            }
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             Application.Run(new MainForm());
