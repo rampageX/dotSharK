@@ -192,6 +192,7 @@ namespace dotSharK
                 RowCount = 1, Margin = Padding.Empty,
                 Padding = Padding.Empty, BackColor = Theme.Window
             };
+            int column = 0;
             foreach (var p in parts)
             {
                 t.ColumnStyles.Add(p.Percent
@@ -201,8 +202,9 @@ namespace dotSharK
                 {
                     p.Control.Dock = DockStyle.Fill;
                     p.Control.Margin = Padding.Empty;
-                    t.Controls.Add(p.Control, t.Controls.Count);
+                    t.Controls.Add(p.Control, column);
                 }
+                column++;
             }
             return t;
         }
@@ -216,33 +218,63 @@ namespace dotSharK
 
         private void BuildToolsPage(Panel page, string[] values)
         {
-            var content = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, BackColor = bg };
-            content.RowStyles.Add(new RowStyle(SizeType.Absolute, 190)); content.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); content.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            var grid = new TableLayoutPanel { Dock = DockStyle.Top, Height = 190, ColumnCount = 5, RowCount = 6, BackColor = bg, Margin = Padding.Empty };
-            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 82)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 28)); grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 28));
-            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); for (int i = 0; i < 5; i++) grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-            grid.Controls.Add(StyledLabel("程序"), 0, 0); grid.Controls.Add(StyledLabel("可执行文件路径（留空时自动检查 dotSharK 目录和 tools 子目录）"), 1, 0); grid.SetColumnSpan(grid.GetControlFromPosition(1, 0), 4);
+            var content = new TableLayoutPanel
+            {
+                ColumnCount = 1, RowCount = 8, Margin = Padding.Empty,
+                Padding = Padding.Empty, BackColor = bg, AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink
+            };
+            content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            content.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight));
+            var header = Row(
+                Fixed(Theme.LabelColumnWidth, Note("程序")),
+                Fill(Note("可执行文件路径（留空时自动检查 dotSharK 目录和 tools 子目录）")),
+                Fixed(Theme.Space8 + Theme.BrowseButtonWidth + Theme.Space8 +
+                    Theme.IconButtonSize * 2 + Theme.Space8));
+            content.Controls.Add(header, 0, 0);
             for (int i = 0; i < 5; i++)
             {
-                int index = i, row = i + 1;
-                grid.Controls.Add(StyledLabel(toolNames[i]), 0, row);
-                toolPaths[i] = StyledTextBox(values[i]); toolPaths[i].ClearSelectionOnFocus = i == 0; SetBottomField(toolPaths[i], true, 8); grid.Controls.Add(toolPaths[i], 1, row);
-                var browse = StyledButton("浏览…", false); browse.Width = 80; browse.Height = DarkPalette.ControlHeight; browse.Anchor = AnchorStyles.Left | AnchorStyles.Bottom; browse.Margin = Padding.Empty; browse.Click += (s, e) => BrowseTool(index); grid.Controls.Add(browse, 2, row);
-                if (i == 4) continue; // aria2c is user-supplied; no unverified updater.
-                var stable = new CircularUpdateButton { Nightly = false, Anchor = AnchorStyles.Right | AnchorStyles.Bottom, Margin = Padding.Empty, AccessibleName = toolNames[i] + " 更新稳定版" };
-                var nightly = new CircularUpdateButton { Nightly = true, Anchor = AnchorStyles.Right | AnchorStyles.Bottom, Margin = Padding.Empty, AccessibleName = toolNames[i] + " 更新 Nightly" };
-                var tips = new ToolTip();
-                tips.SetToolTip(stable, "更新 " + toolNames[i] + " 稳定版"); tips.SetToolTip(nightly, i == 3 ? "更新 Deno Canary（开发版）" : "更新 " + toolNames[i] + " Nightly");
-                stable.Click += async (s, e) => await UpdateToolAsync(index, false);
-                nightly.Click += async (s, e) => await UpdateToolAsync(index, true);
-                toolUpdateButtons.Add(stable); toolUpdateButtons.Add(nightly);
-                grid.Controls.Add(stable, 3, row); grid.Controls.Add(nightly, 4, row);
+                int index = i;
+                int rowIndex = i + 1;
+                content.RowStyles.Add(new RowStyle(SizeType.Absolute,
+                    Theme.ControlHeight + Theme.Space12));
+                toolPaths[i] = StyledTextBox(values[i]);
+                toolPaths[i].Name = "txtTool" + i;
+                var browse = StyledButton("浏览…", false);
+                browse.Name = "btnBrowseTool" + i;
+                browse.Click += (s, e) => BrowseTool(index);
+                var stable = new IconButton { Nightly = false,
+                    AccessibleName = toolNames[i] + " 更新稳定版" };
+                var nightly = new IconButton { Nightly = true,
+                    AccessibleName = toolNames[i] + " 更新 Nightly" };
+                if (i < 4)
+                {
+                    v2ToolTips.SetToolTip(stable, "更新 " + toolNames[i] + " 稳定版");
+                    v2ToolTips.SetToolTip(nightly, i == 3 ?
+                        "更新 Deno Canary（开发版）" :
+                        "更新 " + toolNames[i] + " Nightly");
+                    stable.Click += async (s, e) => await UpdateToolAsync(index, false);
+                    nightly.Click += async (s, e) => await UpdateToolAsync(index, true);
+                    toolUpdateButtons.Add(stable);
+                    toolUpdateButtons.Add(nightly);
+                }
+                else { stable.Visible = false; nightly.Visible = false; }
+                var row = Row(
+                    Fixed(Theme.LabelColumnWidth, Label(toolNames[i])),
+                    Fill(toolPaths[i]), Fixed(Theme.Space8),
+                    Fixed(Theme.BrowseButtonWidth, browse), Fixed(Theme.Space8),
+                    Fixed(Theme.IconButtonSize, stable), Fixed(Theme.Space8),
+                    Fixed(Theme.IconButtonSize, nightly));
+                content.Controls.Add(row, 0, rowIndex);
             }
-            content.Controls.Add(grid, 0, 0);
-            toolUpdateStatus = new Label { Text = "绿色按钮更新稳定版；黄色按钮更新 Nightly。更新使用 YT-DLP 页中的主代理。未指定路径时写入程序目录的 tools 子目录。", Dock = DockStyle.Fill, ForeColor = muted, Padding = new Padding(0, 7, 0, 0), AutoEllipsis = true };
-            content.Controls.Add(toolUpdateStatus, 0, 1);
-            content.Controls.Add(new Label { Text = "路径保存在 dotSharK.ini 中。浏览按钮只选择路径；在线更新会先下载到临时位置并验证版本，再替换目标文件。FFmpeg 稳定版来自 Gyan Builds，Nightly 来自 BtbN FFmpeg Builds。", Dock = DockStyle.Fill, ForeColor = muted, Padding = new Padding(0, 10, 0, 0), AutoEllipsis = true }, 0, 2);
-            page.Controls.Add(content);
+            content.RowStyles.Add(new RowStyle(SizeType.Absolute,
+                Theme.Space16 + Theme.Space12 * 3));
+            toolUpdateStatus = Note("绿色按钮更新稳定版；黄色按钮更新 Nightly。更新使用 YT-DLP 页中的主代理。未指定路径时写入程序目录的 tools 子目录。");
+            toolUpdateStatus.Name = "lblUpdateStatus";
+            content.Controls.Add(toolUpdateStatus, 0, 6);
+            content.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space12 * 5));
+            content.Controls.Add(Note("路径保存在 dotSharK.ini 中。浏览按钮只选择路径；在线更新会先下载到临时位置并验证版本，再替换目标文件。FFmpeg 稳定版来自 Gyan Builds，Nightly 来自 BtbN FFmpeg Builds。"), 0, 7);
+            Scrolled(page, content);
         }
 
         private async Task UpdateToolAsync(int toolIndex, bool nightly)
