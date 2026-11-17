@@ -220,10 +220,15 @@ namespace dotSharK
             cookieFileBox = StyledTextBox(Options.CookieFile); SetBottomField(cookieFileBox, true, 8); grid.Controls.Add(cookieFileBox, 1, 9);
             var cookieBrowse = StyledButton("浏览…", false); SetBottomField(cookieBrowse, true, 0); cookieBrowse.Click += BrowseCookieFile; grid.Controls.Add(cookieBrowse, 2, 9);
             grid.Controls.Add(StyledLabel("视频质量限制"), 0, 10);
-            var qualityLimitRow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = Padding.Empty, Padding = new Padding(0, 4, 0, 0) };
-            qualityLimitRow.Controls.Add(new Label { Text = "前：", Width = 30, Height = DarkPalette.ControlHeight, TextAlign = ContentAlignment.MiddleLeft, ForeColor = fg, Margin = Padding.Empty });
-            qualityLimitBox = new DarkNumericUpDown { Minimum = 0, Maximum = 9999, Value = Math.Max(0, Math.Min(9999, Options.VideoQualityLimit)), Width = 96, Height = DarkPalette.ControlHeight, Margin = Padding.Empty, BackColor = field, ForeColor = fg, BorderStyle = BorderStyle.FixedSingle, TextAlign = HorizontalAlignment.Center };
-            qualityLimitRow.Controls.Add(qualityLimitBox); grid.Controls.Add(qualityLimitRow, 1, 10);
+            // Use the same centered label style as all other settings; avoid FlowLayoutPanel's top padding.
+            var qualityLimitRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty, Padding = Padding.Empty, BackColor = bg };
+            qualityLimitRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 32));
+            qualityLimitRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100));
+            qualityLimitRow.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            var qualityPrefix = StyledLabel("前："); qualityPrefix.Margin = Padding.Empty;
+            qualityLimitRow.Controls.Add(qualityPrefix, 0, 0);
+            qualityLimitBox = new DarkNumericUpDown { Minimum = 0, Maximum = 9999, Value = Math.Max(0, Math.Min(9999, Options.VideoQualityLimit)), Width = 96, Height = DarkPalette.ControlHeight, Margin = Padding.Empty, Anchor = AnchorStyles.Left, BackColor = field, ForeColor = fg, BorderStyle = BorderStyle.FixedSingle, TextAlign = HorizontalAlignment.Center };
+            qualityLimitRow.Controls.Add(qualityLimitBox, 1, 0); grid.Controls.Add(qualityLimitRow, 1, 10);
             var qualityHint = new Label { Text = "默认前三个不同分辨率档位；0 为不限制。同分辨率的不同编码、HDR 选项均保留。", ForeColor = muted, Dock = DockStyle.Fill, TextAlign = ContentAlignment.TopLeft, Padding = new Padding(0, 5, 0, 0), AutoEllipsis = true };
             grid.Controls.Add(qualityHint, 1, 11); grid.SetColumnSpan(qualityHint, 2);
             page.Controls.Add(grid);
