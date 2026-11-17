@@ -1,4 +1,4 @@
-# dotSharK 1.0.3
+# dotSharK 1.0.4
 
 dotSharK 是一个轻量的 Windows yt-dlp 图形外壳，使用 **C#、WinForms 和 .NET Framework 4.8** 编写。程序使用暗色界面和绿色强调色，实际解析与下载由用户选择的 yt-dlp 完成。
 
@@ -40,6 +40,13 @@ dotnet build src\dotSharK.csproj -c Release
 ```
 
 构建输出位于 `src\bin\Release\dotSharK.exe`。项目不依赖 Visual Studio IDE。
+
+## 1.0.4 更新内容
+
+- 主窗口在前台时检测剪贴板里的单个 HTTP/HTTPS 链接，有新链接时“分析链接”按钮亮绿色闪烁提示。
+- 点击“分析链接”，自动粘贴剪贴板网址并立即开始解析，保留原有的视频/播放列表选择流程。
+- 剪贴板链接与地址栏相同时不再闪烁；手动粘贴相同链接立即停止提示。切换到后台或解析期间停止闪烁。
+- 仅检测链接文本，不自动联网或下载；保留 v1.0.3 全部功能。
 
 ## 1.0.3 更新内容
 
