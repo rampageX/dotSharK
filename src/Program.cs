@@ -1,5 +1,6 @@
 using System;
 using System.Windows.Forms;
+using System.Runtime.CompilerServices;
 
 namespace dotSharK
 {
@@ -7,6 +8,13 @@ namespace dotSharK
     {
         [STAThread]
         private static void Main(string[] args)
+        {
+            EmbeddedUiAssembly.Initialize();
+            Run(args);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void Run(string[] args)
         {
             // Chromium passes the extension origin as the native host's first argument.
             // Do not initialize WinForms for either fully silent entry point.
