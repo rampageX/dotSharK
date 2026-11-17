@@ -289,7 +289,7 @@ namespace dotSharK
                 });
                 queueGrid.Columns.Add(new DataGridViewTextBoxColumn
                 {
-                    Name = "quality", HeaderText = "质量方案", Width = Theme.QualityColumnWidth,
+                    Name = "quality", HeaderText = "质量方案", MinimumWidth = Theme.QualityColumnWidth, Width = Theme.QualityColumnWidth,
                     AutoSizeMode = DataGridViewAutoSizeColumnMode.None
                 });
                 queueGrid.Columns.Add(new DataGridViewTextBoxColumn
