@@ -29,7 +29,7 @@ jobs:
           & $compiler /nologo /codepage:65001 /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:ui-v2\bin\Release\DotSharK.UiFoundation.dll /out:DropdownOverflowRegression.exe ci-tests\DropdownOverflowRegression.cs
           if ($LASTEXITCODE -ne 0) { throw 'Dropdown regression harness compile failed' }
           New-Item -ItemType Directory -Force Screenshots | Out-Null
-          $env:PATH = (Resolve-Path ui-v2\bin\Release).Path + ';' + $env:PATH
+          Copy-Item ui-v2\bin\Release\DotSharK.UiFoundation.dll .\DotSharK.UiFoundation.dll
           & .\DropdownOverflowRegression.exe (Resolve-Path Screenshots).Path
           if ($LASTEXITCODE -ne 0) { throw 'Dropdown regression failed' }
       - name: Package executable and screenshots
