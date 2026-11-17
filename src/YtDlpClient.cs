@@ -418,6 +418,72 @@ namespace dotSharK
                 args.Insert(args.Count - 2, "--downloader");
             }
             ApplyCustomOverrides(args, options);
+            // Domain-specific bypass takes precedence over even custom --proxy.
+            ApplyNoProxySite(args, options, originPageUrl, SelectsAria2c(args));
+        }
+
+        private static bool SelectsAria2c(List<string> args)
+        {
+            for (int i = 0; i < args.Count - 1; i++)
+            {
+                string value = null;
+                if (args[i] == "--downloader" && i + 1 < args.Count - 1)
+                    value = args[i + 1];
+                else if (args[i].StartsWith("--downloader=", StringComparison.OrdinalIgnoreCase))
+                    value = args[i].Substring("--downloader=".Length);
+                if (value != null && value.IndexOf("aria2c", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return true;
+            }
+            return false;
+        }
+
+        internal static bool ApplyNoProxySite(List<string> args, YtDlpOptions options, string originPageUrl, bool usesAria2c)
+        {
+            if (options == null || !MatchesAriaSite(originPageUrl, options.NoProxySites))
+                return false;
+
+            // Explicit empty --proxy disables inherited proxy environment variables.
+            // Remove both UI and custom proxy arguments, preserve their saved values.
+            for (int i = 0; i < args.Count - 1;)
+            {
+                string key = CanonicalSwitch(args[i]);
+                if (key == "--proxy" || key == "--geo-verification-proxy")
+                {
+                    int count = args[i].Contains("=") ? 1 : Math.Min(2, args.Count - 1 - i);
+                    args.RemoveRange(i, count);
+                }
+                else i++;
+            }
+            args.Insert(args.Count - 1, "--proxy");
+            args.Insert(args.Count - 1, "");
+
+            if (usesAria2c)
+            {
+                // aria2c can independently read proxies from aria2.conf or the
+                // environment. Explicit child command-line options override both.
+                const string direct = " --all-proxy= --http-proxy= --https-proxy= --ftp-proxy=";
+                bool combined = false;
+                for (int i = 0; i < args.Count - 1; i++)
+                {
+                    if (args[i] == "--downloader-args" && i + 1 < args.Count - 1 &&
+                        args[i + 1].StartsWith("aria2c:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        args[i + 1] += direct;
+                        combined = true;
+                    }
+                    else if (args[i].StartsWith("--downloader-args=aria2c:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        args[i] += direct;
+                        combined = true;
+                    }
+                }
+                if (!combined)
+                {
+                    args.Insert(args.Count - 1, "--downloader-args");
+                    args.Insert(args.Count - 1, "aria2c:" + direct.TrimStart());
+                }
+            }
+            return true;
         }
 
         private static void ApplyCustomOverrides(List<string> args, YtDlpOptions options)
