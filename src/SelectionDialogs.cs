@@ -95,6 +95,9 @@ namespace dotSharK
             var grid = new DataGridView { Dock = DockStyle.Fill, BackgroundColor = DarkPalette.Surface, BorderStyle = BorderStyle.None, GridColor = DarkPalette.Border, AllowUserToAddRows = false, AllowUserToDeleteRows = false, AllowUserToResizeRows = false, ReadOnly = true, MultiSelect = false, SelectionMode = DataGridViewSelectionMode.FullRowSelect, RowHeadersVisible = false, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill, EnableHeadersVisualStyles = false, ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None, CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal, ColumnHeadersHeight = 34, RowTemplate = { Height = 36 } };
             grid.AdvancedColumnHeadersBorderStyle.All = DataGridViewAdvancedCellBorderStyle.None;
             grid.ColumnHeadersDefaultCellStyle.BackColor = DarkPalette.Surface; grid.ColumnHeadersDefaultCellStyle.ForeColor = DarkPalette.Muted;
+            // Selecting a data cell must not paint its column header in the Windows accent color.
+            grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = DarkPalette.Surface;
+            grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = DarkPalette.Muted;
             grid.DefaultCellStyle.BackColor = DarkPalette.Surface; grid.DefaultCellStyle.ForeColor = DarkPalette.Foreground; grid.DefaultCellStyle.SelectionBackColor = DarkPalette.Selection; grid.DefaultCellStyle.SelectionForeColor = DarkPalette.Foreground; grid.DefaultCellStyle.Padding = new Padding(8, 0, 8, 0);
             NativeDarkTheme.ApplyOnHandleCreated(grid, "DarkMode_Explorer"); NativeDarkTheme.ApplyScrollBarsOnHandleCreated(grid, "DarkMode_Explorer");
             return grid;
