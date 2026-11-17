@@ -5,6 +5,7 @@ on:
       - feature/ui-v2-redesign
       - main
       - feature/portable-data
+      - feature/embedded-ui
   workflow_dispatch:
 
 jobs:
@@ -23,9 +24,18 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Integrated production EXE compilation failed' }
           dotnet build ui-v2/UiV2Stage4Preview.csproj -c Release --nologo
           if ($LASTEXITCODE -ne 0) { throw 'Stage 5 preview compilation failed' }
-          if (!(Test-Path src/bin/Release/DotSharK.UiFoundation.dll)) {
-            throw 'UI V2 DLL was not copied with the production executable'
-          }
+          if (Test-Path src/bin/Release/DotSharK.UiFoundation.dll) { throw 'Production output must not require a sidecar UI DLL' }
+      - name: Verify standalone EXE with no external UI assembly
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force standalone | Out-Null
+          Copy-Item src/bin/Release/dotSharK.exe standalone/
+          $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework\v4.0.30319\csc.exe'
+          & $compiler /nologo /codepage:65001 /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Core.dll /out:standalone/SingleExeAcceptance.exe ci-tests/SingleExeAcceptance.cs
+          if ($LASTEXITCODE -ne 0) { throw 'Single EXE harness compile failed' }
+          & ./standalone/SingleExeAcceptance.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Single EXE isolation test failed' }
       - name: Verify browser link context and Native Host URL routing
         shell: pwsh
         run: |
@@ -37,7 +47,6 @@ jobs:
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force package-light | Out-Null
           Copy-Item src\bin\Release\dotSharK.exe package-light\
-          Copy-Item src\bin\Release\DotSharK.UiFoundation.dll package-light\
           Copy-Item BrowserExtension package-light\BrowserExtension -Recurse
           Copy-Item README.md,LICENSE package-light\
           Compress-Archive -Path package-light\* -DestinationPath dotSharK_UIV2_Lightweight_Windows.zip -Force
@@ -112,7 +121,7 @@ jobs:
           & $compiler /nologo /codepage:65001 /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Core.dll /r:System.Web.Extensions.dll /r:ui-v2\bin\Release\DotSharK.UiFoundation.dll /out:UiV2Stage6Acceptance.exe ci-tests\UiV2Stage6Acceptance.cs
           if ($LASTEXITCODE -ne 0) { throw 'Integrated Stage 6 harness compilation failed' }
           Copy-Item src\bin\Release\dotSharK.exe .
-          Copy-Item src\bin\Release\DotSharK.UiFoundation.dll .
+          Copy-Item ui-v2\bin\Release\DotSharK.UiFoundation.dll .
           & .\tools\ffmpeg.exe -hide_banner -loglevel error -f lavfi -i 'testsrc2=size=160x90:rate=12' -t 1 -an -c:v mpeg4 -q:v 6 -y Sample.mp4
           if ($LASTEXITCODE -ne 0) { throw 'Could not generate actual MP4 fixture' }
           New-Item -ItemType Directory -Force Screenshots | Out-Null
@@ -124,7 +133,6 @@ jobs:
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force package\dotSharK\tools,package\Screenshots,package\TestSources | Out-Null
           Copy-Item src\bin\Release\dotSharK.exe package\dotSharK\
-          Copy-Item src\bin\Release\DotSharK.UiFoundation.dll package\dotSharK\
           Copy-Item tools\*.exe package\dotSharK\tools\
           Copy-Item Screenshots\*.png package\Screenshots\
           Copy-Item ci-tests\UiV2Stage6Acceptance.cs package\TestSources\

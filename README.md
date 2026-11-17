@@ -1,4 +1,4 @@
-# dotSharK 1.0.6
+# dotSharK 1.0.6 Single EXE Preview
 
 dotSharK 是一个轻量的 Windows yt-dlp 图形外壳，使用 **C#、WinForms 和 .NET Framework 4.8** 编写。程序使用暗色界面和绿色强调色，实际解析与下载由用户选择的 yt-dlp 完成。
 
@@ -99,3 +99,8 @@ yt-dlp 项目与使用说明：<https://github.com/yt-dlp/yt-dlp>
 任务记录：`SilentQueue/Pending`、`SilentQueue/Active`，不使用已下载档案拦截重复下载；托盘日志：`Logs/tray-ui.log`。配置与已完成任务仍位于 EXE 同级。不同程序目录独立运行。旧 AppData 记录不自动迁移。
 
 浏览器 Native Host 清单在 `BrowserExtension/NativeMessaging`；浏览器集成仍需注册，移动程序或换电脑需重跑安装脚本。自定义工具、Cookie、下载位置若配置为绝对路径，换盘或换电脑需调整；浏览器 Cookie 仍由浏览器自身管理。
+
+
+## 单 EXE 测试版
+
+UI 程序集已嵌入 dotSharK.exe 并从内存加载，无需外置 DotSharK.UiFoundation.dll，也不会释放 UI DLL 到磁盘。覆盖 EXE 后可删除旧 UI DLL；浏览器插件和外部下载工具仍按原配置使用。
