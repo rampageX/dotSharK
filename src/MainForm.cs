@@ -805,6 +805,7 @@ namespace dotSharK
                         else if (key == "deno") denoPath = value;
                         else if (key == "aria2c") aria2cPath = value;
                         else if (key == "aria2c-sites") ytdlpOptions.Aria2cSites = value;
+                        else if (key == "no-proxy-sites") ytdlpOptions.NoProxySites = value;
                         else if (key == "custom-args") ytdlpOptions.CustomArguments = value;
                         else if (key == "proxy-enabled") ytdlpOptions.ProxyEnabled = value != "0";
                         else if (key == "geo-proxy-enabled") ytdlpOptions.GeoProxyEnabled = value != "0";
@@ -842,6 +843,7 @@ namespace dotSharK
                     "ffprobe=" + Uri.EscapeDataString(ffprobePath), "deno=" + Uri.EscapeDataString(denoPath),
                     "aria2c=" + Uri.EscapeDataString(aria2cPath),
                     "aria2c-sites=" + Uri.EscapeDataString(ytdlpOptions.Aria2cSites ?? ""),
+                    "no-proxy-sites=" + Uri.EscapeDataString(ytdlpOptions.NoProxySites ?? ""),
                     "custom-args=" + Uri.EscapeDataString(ytdlpOptions.CustomArguments ?? ""),
                     "fragments=" + ytdlpOptions.ConcurrentFragments, "downloads=" + Math.Max(1, Math.Min(6, ytdlpOptions.ConcurrentDownloads)),
                     "video-quality-limit=" + ytdlpOptions.VideoQualityLimit,
