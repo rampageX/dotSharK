@@ -131,7 +131,7 @@ namespace dotSharK
             root.Controls.Add(heading, 0, 0);
 
             var options = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 10, RowCount = 1, BackColor = DarkPalette.Background };
-            float[] widths = { 4, 8, 12, 20, 4, 15, 4, 12, 4, 17 }; foreach (float w in widths) options.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, w));
+            float[] widths = { 4, 8, 9, 23, 4, 15, 4, 12, 4, 17 }; foreach (float w in widths) options.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, w));
             options.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             modeBox = MakeCombo(new object[] { "视频", "仅音频" });
             modeBox.ShowFocusAccent = false;
