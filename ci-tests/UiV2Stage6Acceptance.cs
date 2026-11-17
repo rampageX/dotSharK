@@ -67,6 +67,12 @@ internal static class UiV2Stage6Acceptance
                 Check(Find<DarkCheckBox>(settings, "chkKeepCompleted").Width > 250 &&
                     Find<DarkCheckBox>(settings, "chkKeepCompleted").Text == "重启后保留已完成任务",
                     "advanced history checkbox caption has full visible width");
+                Check(Find<DarkCheckBox>(settings, "chkKeepCompleted").ForeColor == Theme.SecondaryText,
+                    "completed history caption matches settings secondary text");
+                var qualityCaption = Find<Label>(settings, "lblVideoQualityLimitCaption");
+                Check(qualityCaption != null && qualityCaption.Text == "视频质量限制 前：" &&
+                    qualityCaption.Width >= TextRenderer.MeasureText(qualityCaption.Text, Theme.BodyFont).Width,
+                    "video quality caption is one fully visible string before the spinner");
                 Check(Find<DarkComboBox>(settings, "cboSilentMaxResolution").SelectedIndex == 0,
                     "silent quality defaults to highest");
             }

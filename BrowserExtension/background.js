@@ -5,8 +5,8 @@ function setupMenu() {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
       id: MENU_ID,
-      title: "发送到 dotSharK（最高画质 · AV1 优先）",
-      contexts: ["page", "video"]
+      title: "发送到 dotSharK（静默下载）",
+      contexts: ["page", "video", "link"]
     });
   });
 }
@@ -17,8 +17,10 @@ chrome.runtime.onStartup.addListener(setupMenu);
 chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId !== MENU_ID) return;
 
-  // Send the page URL, not the media-stream URL (m3u8/blob/etc.).
-  const url = info.pageUrl || (tab && tab.url) || "";
+  // On a link/thumbnail, send its target URL, not the listing page.
+  // On a page/video context, retain existing page-URL behavior (not srcUrl).
+  // Do not silently fall back to the page for javascript:/blob: links.
+  const url = info.linkUrl || info.pageUrl || (tab && tab.url) || "";
   if (!/^https?:\/\//i.test(url)) return;
 
   chrome.runtime.sendNativeMessage(HOST, { url }, response => {

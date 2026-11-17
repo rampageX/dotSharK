@@ -18,6 +18,7 @@ namespace dotSharK.UiV2
             SetStyle(DarkPaint.Buffered | ControlStyles.Selectable, true);
             DarkPaint.Setup(this);
             Height = Theme.ControlHeight;
+            ForeColor = Theme.PrimaryText;
             MinimumSize = new Size(Theme.CheckboxSize, Theme.ControlHeight);
             TabStop = true;
             AccessibleRole = AccessibleRole.CheckButton;
@@ -96,7 +97,7 @@ namespace dotSharK.UiV2
             var text = new Rectangle(Theme.CheckboxSize + Theme.Space8, 0,
                 Math.Max(0, Width - Theme.CheckboxSize - Theme.Space8), Height);
             DarkPaint.DrawText(e.Graphics, Text, Font, text,
-                Enabled ? Theme.PrimaryText : Theme.DisabledText);
+                Enabled ? ForeColor : Theme.DisabledText);
         }
     }
 }

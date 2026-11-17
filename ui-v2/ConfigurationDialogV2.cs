@@ -508,10 +508,19 @@ namespace dotSharK
                 Value = Math.Max(0, Math.Min(9999, Options.VideoQualityLimit)),
                 Width = Theme.FullNumericWidth, Height = Theme.ControlHeight
             };
-            SettingRow(grid, 10, "视频质量限制", Row(
-                Fixed(Theme.Space24 + Theme.Space8, Label("前：")),
-                Fixed(Theme.FullNumericWidth, qualityLimitBox),
-                Fill(null)));
+            // One continuous caption before the numeric field. The normal
+            // 96px settings-label column would otherwise clip "前：" away.
+            var qualityCaption = Label("视频质量限制 前：");
+            qualityCaption.Name = "lblVideoQualityLimitCaption";
+            int qualityCaptionWidth = TextRenderer.MeasureText(qualityCaption.Text,
+                Theme.BodyFont).Width + Theme.Space12;
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute,
+                Theme.ControlHeight + Theme.Space12));
+            var qualityRow = SpacedRow(Row(
+                Fixed(qualityCaptionWidth, qualityCaption),
+                Fixed(Theme.FullNumericWidth, qualityLimitBox), Fill(null)));
+            grid.Controls.Add(qualityRow, 0, 10);
+            grid.SetColumnSpan(qualityRow, 2);
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute,
                 Theme.ControlHeight + Theme.Space12));
             grid.Controls.Add(SpacedRow(Note("默认前三个不同分辨率档位；0 为不限制。同分辨率的不同编码、HDR 选项均保留。")), 1, 11);
@@ -623,6 +632,7 @@ namespace dotSharK
 
             keepCompletedBox = StyledToggle("重启后保留已完成任务", Options.KeepCompletedTasks);
             keepCompletedBox.Name = "chkKeepCompleted";
+            keepCompletedBox.ForeColor = Theme.SecondaryText;
             // Standalone checkboxes do not autosize; fill the entire row so the
             // Chinese caption renders, not only the 16px checkmark square.
             keepCompletedBox.Dock = DockStyle.Fill;

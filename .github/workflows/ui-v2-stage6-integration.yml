@@ -24,6 +24,11 @@ jobs:
           if (!(Test-Path src/bin/Release/DotSharK.UiFoundation.dll)) {
             throw 'UI V2 DLL was not copied with the production executable'
           }
+      - name: Verify browser link context and Native Host URL routing
+        shell: pwsh
+        run: |
+          node ci-tests/BrowserExtensionAcceptance.js
+          if ($LASTEXITCODE -ne 0) { throw 'Browser extension regression failed' }
       - name: Download official portable CLI tools for real transfer regression and ZIP
         shell: pwsh
         run: |
@@ -101,6 +106,8 @@ jobs:
           Copy-Item Screenshots\*.png package\Screenshots\
           Copy-Item ci-tests\UiV2Stage6Acceptance.cs package\TestSources\
           Copy-Item ci-tests\UiV2Stage5Acceptance.cs package\TestSources\
+          Copy-Item ci-tests\BrowserExtensionAcceptance.js package\TestSources\
+          Copy-Item BrowserExtension package\BrowserExtension -Recurse
           $sha = (git rev-parse HEAD).Trim()
           @"
           dotSharK UI V2 Phase 6 integrated testing build
@@ -111,7 +118,7 @@ jobs:
           Screenshots: production integrated windows and real downloaded queue
           Tests: Stage5 preview UI baseline; Stage6 production UI + settings, cookie/proxy
           command routing, Native Host validation, tray hide/restore and actual yt-dlp
-          downloads against a local HTTP MP4 server.
+          downloads against a local HTTP MP4 server; extension link/page routing tests.
           This is a development test build, not a formal Release.
           Not covered automatically: YouTube login/Cookie validity, remote authenticated
           downloads, browser extension end-to-end, Win11 caption appearance and
@@ -125,10 +132,11 @@ jobs:
           New-Item -ItemType Directory -Force package-light | Out-Null
           Copy-Item src\bin\Release\dotSharK.exe package-light\
           Copy-Item src\bin\Release\DotSharK.UiFoundation.dll package-light\
+          Copy-Item BrowserExtension package-light\BrowserExtension -Recurse
           Compress-Archive -Path package-light\* -DestinationPath dotSharK_UIV2_Lightweight_Windows.zip -Force
       - uses: actions/upload-artifact@v4
         with:
-          name: dotSharK-ui-v2-lightweight-exe-dll
+          name: dotSharK-ui-v2-lightweight-with-extension
           path: dotSharK_UIV2_Lightweight_Windows.zip
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
