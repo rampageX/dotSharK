@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "Send to dotSharK",
+  "version": "0.1.0",
+  "description": "Send the current video page to dotSharK's silent AV1-preferred download queue.",
+  "permissions": ["contextMenus", "nativeMessaging"],
+  "background": {
+    "service_worker": "background.js"
+  }
+}
