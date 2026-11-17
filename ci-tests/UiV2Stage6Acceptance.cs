@@ -64,6 +64,15 @@ internal static class UiV2Stage6Acceptance
                             TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine).Width;
                         Check(queue.Columns["quality"].Width - Theme.Space24 >= measured,
                             "quality text and custom paint insets fit at font scale " + scale);
+                        foreach (string[] sample in new[] { new[] { "source", "播放列表" }, new[] { "status", "下载中 100%" } })
+                        {
+                            int textWidth = TextRenderer.MeasureText(sample[1], queue.Font, Size.Empty,
+                                TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine).Width;
+                            Check(queue.Columns[sample[0]].Width - Theme.Space24 >= textWidth,
+                                sample[0] + " full text fits at font scale " + scale);
+                        }
+                        Check(queue.Columns["title"].AutoSizeMode == DataGridViewAutoSizeColumnMode.Fill,
+                            "video receives all remaining width at font scale " + scale);
                         queue.Font = originalFont;
                     }
                 }

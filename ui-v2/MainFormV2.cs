@@ -297,6 +297,8 @@ namespace dotSharK
                     Name = "status", HeaderText = "状态", Width = Theme.StatusColumnWidth,
                     AutoSizeMode = DataGridViewAutoSizeColumnMode.None
                 });
+                EnsureQueueColumnWidths();
+                queueGrid.FontChanged += (s, e) => EnsureQueueColumnWidths();
                 queueGrid.SelectionChanged += (s, e) => UpdateQueueControls();
                 // Dark context menu includes file/folder actions for completed tasks.
                 var queueMenu = DarkContextMenuRendererV2();
@@ -1034,6 +1036,7 @@ namespace dotSharK
             if (!String.IsNullOrWhiteSpace(item.DisplayQuality)) quality = item.DisplayQuality;
             else item.DisplayQuality = quality;
             int row = queueGrid.Rows.Add(item.Title, source, quality, item.Status);
+            EnsureTextColumnWidth("source", source, Theme.SourceColumnWidth);
             EnsureQualityWidth(quality);
             EnsureStatusWidth(item.Status);
             queueGrid.Rows[row].Tag = item; queueCountLabel.Text = "下载队列（" + queueItems.Count + "）"; UpdateQueueControls();
@@ -1052,22 +1055,36 @@ namespace dotSharK
                     break;
                 }
         }
+        private void EnsureQueueColumnWidths()
+        {
+            if (queueGrid == null || !queueGrid.Columns.Contains("status")) return;
+            EnsureTextColumnWidth("source", "播放列表", Theme.SourceColumnWidth);
+            EnsureQualityWidth("1080p 以内 · AV1 优先");
+            EnsureStatusWidth("下载中 100%");
+            foreach (DataGridViewRow row in queueGrid.Rows)
+            {
+                EnsureTextColumnWidth("source", Convert.ToString(row.Cells["source"].Value), Theme.SourceColumnWidth);
+                EnsureQualityWidth(Convert.ToString(row.Cells["quality"].Value));
+                EnsureStatusWidth(Convert.ToString(row.Cells["status"].Value));
+            }
+        }
+        private void EnsureTextColumnWidth(string name, string text, int minimum)
+        {
+            // Use the same GDI flags and 12px left/right insets as DarkPaint.DrawText.
+            int required = TextRenderer.MeasureText(text ?? "", queueGrid.Font, Size.Empty,
+                TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine).Width + Theme.Space24 + Theme.Space8;
+            var column = queueGrid.Columns[name];
+            int width = Math.Max(minimum, required);
+            if (column.MinimumWidth < width) column.MinimumWidth = width;
+            if (column.Width < width) column.Width = width;
+        }
         private void EnsureQualityWidth(string quality)
         {
-            // Match DarkPaint.DrawText's GDI text measurement and 12px insets.
-            int textWidth = TextRenderer.MeasureText(quality ?? "", queueGrid.Font, Size.Empty,
-                TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine).Width;
-            int required = Math.Max(Theme.QualityColumnWidth, textWidth) + Theme.Space24 + Theme.Space8;
-            var column = queueGrid.Columns["quality"];
-            if (column.Width < required) column.Width = required;
+            EnsureTextColumnWidth("quality", quality, Theme.QualityColumnWidth + Theme.Space24 + Theme.Space8);
         }
         private void EnsureStatusWidth(string status)
         {
-            // Custom painted cell has 12px text insets on both sides.
-            int required = TextRenderer.MeasureText(status ?? "", queueGrid.Font, Size.Empty,
-                TextFormatFlags.NoPadding).Width + Theme.Space24 + Theme.Space8;
-            if (queueGrid.Columns["status"].Width < required)
-                queueGrid.Columns["status"].Width = required;
+            EnsureTextColumnWidth("status", status, Theme.StatusColumnWidth);
         }
 
         private void UpdateQueueControls()
