@@ -36,7 +36,7 @@ namespace dotSharK
             ProcessResult result = await RunCaptureAsync(args);
             if (result.ExitCode != 0 || String.IsNullOrWhiteSpace(result.Stdout))
                 throw new InvalidOperationException(UsefulError(result.Stderr, result.ExitCode));
-            return ParseMediaInfo(ParseJson(result.Stdout));
+            return ParseMediaInfo(ParseJson(result.Stdout), options == null ? 3 : options.VideoQualityLimit);
         }
 
         public async Task<LinkInspection> InspectAsync(string url, YtDlpOptions options)
@@ -49,7 +49,7 @@ namespace dotSharK
             var root = ParseJson(result.Stdout);
             var rawEntries = ObjList(root, "entries");
             bool isPlaylist = Str(root, "_type").Equals("playlist", StringComparison.OrdinalIgnoreCase) || rawEntries.Count > 0;
-            if (!isPlaylist) return new LinkInspection { Media = ParseMediaInfo(root) };
+            if (!isPlaylist) return new LinkInspection { Media = ParseMediaInfo(root, options == null ? 3 : options.VideoQualityLimit) };
 
             var playlist = new PlaylistInfo { Title = Str(root, "title") };
             int fallbackIndex = 0;
@@ -85,7 +85,7 @@ namespace dotSharK
             return root;
         }
 
-        private static MediaInfo ParseMediaInfo(Dictionary<string, object> root)
+        private static MediaInfo ParseMediaInfo(Dictionary<string, object> root, int videoQualityLimit)
         {
             var info = new MediaInfo
             {
@@ -94,11 +94,14 @@ namespace dotSharK
             };
             var formats = ObjList(root, "formats");
             var videos = formats.Where(f => Str(f, "vcodec") != "" && Str(f, "vcodec") != "none" && Int(f, "height") > 0).ToList();
-            var topHeights = videos.Select(f => Int(f, "height")).Distinct().OrderByDescending(x => x).Take(3).ToList();
+            // Count distinct resolution heights, not codecs or HDR variants.
+            // 0 disables the display limit; yt-dlp always returns the complete format list.
+            var topHeights = videos.Select(f => Int(f, "height")).Distinct().OrderByDescending(x => x);
+            var allowedHeights = new HashSet<int>(videoQualityLimit > 0 ? topHeights.Take(videoQualityLimit) : topHeights);
 
             // Keep one representative per resolution + codec + HDR class. Container is intentionally
             // not part of the key, so MP4/MKV preferences cannot hide VP9/AV1 alternatives.
-            foreach (var group in videos.Where(f => topHeights.Contains(Int(f, "height")))
+            foreach (var group in videos.Where(f => allowedHeights.Contains(Int(f, "height")))
                 .GroupBy(f => Int(f, "height") + "|" + CodecName(Str(f, "vcodec")) + "|" + Range(f)))
             {
                 var f = group.OrderByDescending(x => Num(x, "tbr")).ThenByDescending(x => Num(x, "filesize") > 0 ? Num(x, "filesize") : Num(x, "filesize_approx")).First();
