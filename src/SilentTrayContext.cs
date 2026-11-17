@@ -13,13 +13,10 @@ namespace dotSharK
     // top-level handles in response, invalidating queued UI callbacks.
     internal sealed class SilentTrayContext : ApplicationContext
     {
-        private const uint AW_HIDE = 0x00010000;
-        private const uint AW_BLEND = 0x00080000;
         private const int SW_SHOW = 5;
+        private const int SW_SHOWMAXIMIZED = 3;
         private const int SW_RESTORE = 9;
 
-        [DllImport("user32.dll", SetLastError = true)]
-        private static extern bool AnimateWindow(IntPtr hWnd, uint time, uint flags);
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool ShowWindow(IntPtr hWnd, int command);
         [DllImport("user32.dll")]
@@ -156,15 +153,9 @@ namespace dotSharK
                     mainRestoreState = mainWindow.WindowState;
                 TraceState("Hide requested " + reason);
 
-                // The OS owns this 150-ms fade; we do not move the form,
-                // resize it, repaint it twice or change its taskbar style.
-                // AW_HIDE can fail in noninteractive sessions and with reduced
-                // motion; Hide() always remains the authoritative transition.
-                if (mainWindow.IsHandleCreated && mainWindow.WindowState != FormWindowState.Minimized)
-                {
-                    try { AnimateWindow(mainWindow.Handle, 150, AW_HIDE | AW_BLEND); }
-                    catch (Exception ex) { TraceState("AnimateWindow failed " + ex.GetType().Name); }
-                }
+                // AnimateWindow(AW_BLEND) can expose an uncomposed Win32
+                // nonclient frame on dark WinForms windows (Aero-like flash).
+                // One direct hide is both compositor-safe and handle-stable.
                 mainWindow.Hide();
                 checkRestore = false;
                 TraceState("Hidden in tray");
@@ -177,8 +168,8 @@ namespace dotSharK
             if (exiting || mainWindow.IsDisposed) return;
             if (hiding)
             {
-                // A fast double-click during the hide animation should not
-                // be lost. Defer the restore until the animation finishes.
+                // A fast tray double-click during a hide transition must not
+                // be lost; defer until that transition finishes.
                 if (mainWindow.IsHandleCreated)
                     mainWindow.BeginInvoke((Action)(() => OpenMainWindow()));
                 return;
@@ -187,21 +178,21 @@ namespace dotSharK
             FormWindowState desiredState = mainRestoreState;
             try
             {
-                // Ensure any OS-mediated native minimize was undone before
-                // showing the window. Show() alone can leave an iconic HWND.
-                if (mainWindow.WindowState == FormWindowState.Minimized)
-                    mainWindow.WindowState = FormWindowState.Normal;
+                // Apply the desired state BEFORE revealing the window.
+                // Previously a maximized form passed through Normal -> Show
+                // -> Maximized, briefly painting the normal caption/frame.
+                if (mainWindow.WindowState != desiredState)
+                    mainWindow.WindowState = desiredState;
                 EnsureOnScreen();
                 if (!mainWindow.Visible) mainWindow.Show();
 
                 IntPtr hwnd = mainWindow.Handle;
                 if (IsIconic(hwnd))
-                    ShowWindow(hwnd, SW_RESTORE);
-                if (!IsWindowVisible(hwnd))
-                    ShowWindow(hwnd, SW_SHOW);
-                if (desiredState == FormWindowState.Maximized &&
-                    mainWindow.WindowState != FormWindowState.Maximized)
-                    mainWindow.WindowState = FormWindowState.Maximized;
+                    ShowWindow(hwnd, desiredState == FormWindowState.Maximized
+                        ? SW_SHOWMAXIMIZED : SW_RESTORE);
+                else if (!IsWindowVisible(hwnd))
+                    ShowWindow(hwnd, desiredState == FormWindowState.Maximized
+                        ? SW_SHOWMAXIMIZED : SW_SHOW);
                 mainRestoreState = desiredState;
 
                 // The tray double-click is a user gesture and is eligible
