@@ -86,6 +86,7 @@ internal static class UiV2Stage5Acceptance
                 Check(grid is DarkDataGridView, "main uses dark table");
                 Check(Find<FlatTextArea>(main, "txtLog") != null, "main uses dark log editor");
                 Save(main, "Main.png");
+                CheckMinimum(main, "btnStartQueue", "Main_Min.png");
                 LogChrome("Main", main);
             }
 
@@ -101,6 +102,7 @@ internal static class UiV2Stage5Acceptance
                     "video download mode has two entries");
                 Check(video.CancelButton != null && video.AcceptButton != null, "video Enter/Esc buttons");
                 Save(video, "Quality.png");
+                CheckMinimum(video, "btnAddToQueue", "Quality_Min.png");
                 LogChrome("Quality", video);
                 Find<Button>(video, "btnAddToQueue").PerformClick();
                 Check(video.DialogResult == DialogResult.OK, "video quality result is OK");
@@ -126,6 +128,7 @@ internal static class UiV2Stage5Acceptance
                     "playlist select all");
                 Check(play.CancelButton != null && play.AcceptButton != null, "playlist Enter/Esc buttons");
                 Save(play, "Playlist.png");
+                CheckMinimum(play, "btnAddToQueue", "Playlist_Min.png");
                 LogChrome("Playlist", play);
                 Find<Button>(play, "btnAddToQueue").PerformClick();
                 Check(play.DialogResult == DialogResult.OK, "playlist returns OK");
@@ -212,6 +215,22 @@ internal static class UiV2Stage5Acceptance
             form.DrawToBitmap(image, new Rectangle(Point.Empty, form.ClientSize));
             image.Save(Path.Combine(output, name), ImageFormat.Png);
         }
+    }
+
+    private static void CheckMinimum(Form form, string buttonName, string image)
+    {
+        var old = form.Size;
+        form.Size = form.MinimumSize;
+        Application.DoEvents();
+        var footer = Find<Button>(form, buttonName);
+        var rect = footer.RectangleToScreen(footer.ClientRectangle);
+        var client = form.RectangleToScreen(form.ClientRectangle);
+        Check(rect.Left >= client.Left && rect.Right <= client.Right &&
+              rect.Top >= client.Top && rect.Bottom <= client.Bottom,
+              form.Text + " minimum-size footer stays inside window");
+        Save(form, image);
+        form.Size = old;
+        Application.DoEvents();
     }
 
     private static void LogChrome(string id, Form form)
