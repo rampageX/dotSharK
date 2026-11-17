@@ -23,65 +23,227 @@ namespace dotSharK
         internal SingleVideoDialogV2(MediaInfo info)
         {
             media = info;
-            Text = "选择视频质量"; StartPosition = FormStartPosition.CenterParent; FormBorderStyle = FormBorderStyle.Sizable;
-            MinimumSize = new Size(820, 580); Size = new Size(940, 680); BackColor = DarkPalette.Background; ForeColor = DarkPalette.Foreground;
-            Font = new Font("Microsoft YaHei UI", 9F); Icon = AppBranding.CreateIcon();
-            var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4, Padding = new Padding(20, 16, 20, 16), BackColor = DarkPalette.Background };
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 54)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44)); root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
-            Controls.Add(root);
-            var heading = new Label { Text = info.Title, Dock = DockStyle.Fill, ForeColor = DarkPalette.Foreground, Font = new Font(Font, FontStyle.Bold), AutoEllipsis = true, TextAlign = ContentAlignment.MiddleLeft };
-            root.Controls.Add(heading, 0, 0);
-
-            var settings = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 8, RowCount = 1, BackColor = DarkPalette.Background };
-            float[] widths = { 6, 18, 6, 18, 6, 22, 6, 18 }; foreach (float w in widths) settings.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, w));
-            modeBox = MakeCombo(new object[] { "视频", "仅音频" }); containerBox = MakeCombo(new object[] { "MKV", "MP4", "WebM" });
-            audioBox = MakeCombo(new object[] { "默认音轨" }); foreach (var a in info.AudioChoices) audioBox.Items.Add(a); audioBox.SelectedIndex = 0;
-            subtitleBox = MakeCombo(new object[] { "不下载字幕" }); foreach (var sub in info.Subtitles) subtitleBox.Items.Add(sub); subtitleBox.SelectedIndex = 0;
-            AddLabel(settings, 0, "下载"); AddLabel(settings, 2, "容器"); AddLabel(settings, 4, "音轨"); AddLabel(settings, 6, "字幕");
-            settings.Controls.Add(modeBox, 1, 0); settings.Controls.Add(containerBox, 3, 0); settings.Controls.Add(audioBox, 5, 0); settings.Controls.Add(subtitleBox, 7, 0);
-            root.Controls.Add(settings, 0, 1);
-
-            videoGrid = MakeGrid();
-            videoGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "分辨率", FillWeight = 20 });
-            videoGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "编码 / HDR", FillWeight = 32 });
-            videoGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "帧率", FillWeight = 16 });
-            videoGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "源格式", FillWeight = 14 });
-            videoGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "估算大小", FillWeight = 18 });
-            foreach (var v in info.VideoChoices)
+            SuspendLayout();
+            try
             {
-                int row = videoGrid.Rows.Add(v.Height + "p", v.Codec + (v.DynamicRange == "SDR" ? "" : " · " + v.DynamicRange), v.Fps > 0 ? v.Fps.ToString("0.##") + " fps" : "—", (v.Container ?? "").ToUpperInvariant(), YtDlpClient.FormatBytes(v.ApproxBytes));
-                videoGrid.Rows[row].Tag = v;
+                Text = "选择视频质量";
+                StartPosition = FormStartPosition.CenterParent;
+                FormBorderStyle = FormBorderStyle.Sizable;
+                MinimumSize = Theme.QualityMinimumSize;
+                Size = new Size(940, 680);
+                BackColor = Theme.Window; ForeColor = Theme.PrimaryText;
+                Font = Theme.BodyFont;
+                Icon = AppBranding.CreateIcon();
+
+                var root = new TableLayoutPanel
+                {
+                    Name = "layoutVideoQuality", Dock = DockStyle.Fill,
+                    ColumnCount = 1, RowCount = 7,
+                    BackColor = Theme.Window,
+                    Margin = Padding.Empty, Padding = new Padding(Theme.Space24)
+                };
+                root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space16));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space16));
+                root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space16));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute,
+                    Theme.ActionHeight + Theme.Space16 * 2 + Theme.BorderWidth));
+                Controls.Add(root);
+                root.Controls.Add(new Label
+                {
+                    Name = "lblVideoTitle", Text = info.Title,
+                    Dock = DockStyle.Fill, Font = Theme.HeadingFont,
+                    ForeColor = Theme.PrimaryText, AutoEllipsis = true,
+                    TextAlign = ContentAlignment.MiddleLeft, Margin = Padding.Empty
+                }, 0, 0);
+
+                modeBox = MakeCombo(new object[] { "视频", "仅音频" });
+                modeBox.Name = "cboVideoMode";
+                containerBox = MakeCombo(new object[] { "MKV", "MP4", "WebM" });
+                containerBox.Name = "cboContainer";
+                audioBox = MakeCombo(new object[] { "默认音轨" });
+                audioBox.Name = "cboAudio";
+                foreach (var track in info.AudioChoices) audioBox.Items.Add(track);
+                audioBox.SelectedIndex = 0;
+                subtitleBox = MakeCombo(new object[] { "不下载字幕" });
+                subtitleBox.Name = "cboSubtitle";
+                foreach (var sub in info.Subtitles) subtitleBox.Items.Add(sub);
+                subtitleBox.SelectedIndex = 0;
+
+                var filters = new TableLayoutPanel
+                {
+                    Name = "layoutVideoFilters", ColumnCount = 7, RowCount = 1,
+                    Dock = DockStyle.Fill, BackColor = Theme.Window,
+                    Margin = Padding.Empty, Padding = Padding.Empty
+                };
+                filters.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+                filters.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.Space8));
+                filters.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+                filters.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.Space8));
+                filters.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+                filters.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.Space8));
+                filters.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+                filters.Controls.Add(FilterGroup("下载", modeBox, Theme.Space12 * 3), 0, 0);
+                filters.Controls.Add(FilterGroup("容器", containerBox, Theme.Space12 * 3), 2, 0);
+                filters.Controls.Add(FilterGroup("音轨", audioBox, Theme.Space12 * 3), 4, 0);
+                filters.Controls.Add(FilterGroup("字幕", subtitleBox, Theme.Space12 * 3), 6, 0);
+                root.Controls.Add(filters, 0, 2);
+
+                videoGrid = MakeGrid();
+                videoGrid.Name = "gridVideoFormats";
+                videoGrid.Columns.Add(new DataGridViewTextBoxColumn
+                {
+                    Name = "resolution", HeaderText = "分辨率", Width = Theme.SourceColumnWidth,
+                    AutoSizeMode = DataGridViewAutoSizeColumnMode.None
+                });
+                videoGrid.Columns.Add(new DataGridViewTextBoxColumn
+                {
+                    Name = "codec", HeaderText = "编码 / HDR",
+                    AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
+                    MinimumWidth = Theme.Space24 * 4
+                });
+                videoGrid.Columns.Add(new DataGridViewTextBoxColumn
+                {
+                    Name = "fps", HeaderText = "帧率", Width = Theme.StatusColumnWidth,
+                    AutoSizeMode = DataGridViewAutoSizeColumnMode.None
+                });
+                videoGrid.Columns.Add(new DataGridViewTextBoxColumn
+                {
+                    Name = "source", HeaderText = "源格式", Width = Theme.StatusColumnWidth,
+                    AutoSizeMode = DataGridViewAutoSizeColumnMode.None
+                });
+                var sizeCol = new DataGridViewTextBoxColumn
+                {
+                    Name = "estimate", HeaderText = "估算大小",
+                    Width = Theme.SourceColumnWidth,
+                    AutoSizeMode = DataGridViewAutoSizeColumnMode.None
+                };
+                sizeCol.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleRight;
+                sizeCol.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+                videoGrid.Columns.Add(sizeCol);
+                foreach (var v in info.VideoChoices)
+                {
+                    int row = videoGrid.Rows.Add(v.Height + "p",
+                        v.Codec + (v.DynamicRange == "SDR" ? "" : " · " + v.DynamicRange),
+                        v.Fps > 0 ? v.Fps.ToString("0.##") + " fps" : "—",
+                        (v.Container ?? "").ToUpperInvariant(), YtDlpClient.FormatBytes(v.ApproxBytes));
+                    videoGrid.Rows[row].Tag = v;
+                }
+                if (videoGrid.Rows.Count > 0)
+                {
+                    videoGrid.Rows[0].Selected = true;
+                    Video = videoGrid.Rows[0].Tag as VideoChoice;
+                }
+                videoGrid.SelectionChanged += (s, e) =>
+                {
+                    if (videoGrid.CurrentRow != null)
+                        Video = videoGrid.CurrentRow.Tag as VideoChoice;
+                };
+                modeBox.SelectedIndexChanged += (s, e) => videoGrid.Enabled = !AudioOnly;
+                root.Controls.Add(videoGrid, 0, 4);
+
+                var cancel = new SecondaryButton
+                {
+                    Name = "btnCancel", Text = "取消", Dock = DockStyle.Fill,
+                    DialogResult = DialogResult.Cancel, Margin = Padding.Empty
+                };
+                var add = new PrimaryButton
+                {
+                    Name = "btnAddToQueue", Text = "加入队列", Dock = DockStyle.Fill,
+                    DialogResult = DialogResult.None, Margin = Padding.Empty
+                };
+                add.Click += (s, e) =>
+                {
+                    if (!AudioOnly && Video == null)
+                    {
+                        DarkMessageBox.Show(this, "请选择一个视频格式。", "dotSharK",
+                            MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        return;
+                    }
+                    DialogResult = DialogResult.OK;
+                    Close();
+                };
+                cancel.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
+                root.Controls.Add(Footer(cancel, add), 0, 6);
+                AssignDialogButtons(add, cancel);
             }
-            if (videoGrid.Rows.Count > 0) { videoGrid.Rows[0].Selected = true; Video = videoGrid.Rows[0].Tag as VideoChoice; }
-            videoGrid.SelectionChanged += (s, e) => { if (videoGrid.CurrentRow != null) Video = videoGrid.CurrentRow.Tag as VideoChoice; };
-            modeBox.SelectedIndexChanged += (s, e) => videoGrid.Enabled = !AudioOnly;
-            root.Controls.Add(videoGrid, 0, 2);
-
-            var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, BackColor = DarkPalette.Background, Padding = new Padding(0, 8, 0, 0) };
-            var add = new DarkButton { Text = "加入队列", Primary = true, Width = 120, Height = DarkPalette.ControlHeight };
-            var cancel = new DarkButton { Text = "取消", Width = 100, Height = DarkPalette.ControlHeight };
-            add.Click += (s, e) => { if (!AudioOnly && Video == null) { DarkMessageBox.Show(this, "请选择一个视频格式。", "dotSharK", MessageBoxButtons.OK, MessageBoxIcon.Information); return; } DialogResult = DialogResult.OK; Close(); };
-            cancel.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
-            buttons.Controls.Add(add); buttons.Controls.Add(cancel); root.Controls.Add(buttons, 0, 3); AcceptButton = add; CancelButton = cancel;
+            finally { ResumeLayout(true); }
         }
 
-        private static V2Combo MakeCombo(IEnumerable<object> values)
+        internal static V2Combo MakeCombo(IEnumerable<object> values)
         {
-            var combo = new V2Combo { Dock = DockStyle.Fill, Height = DarkPalette.ControlHeight, Margin = new Padding(0, 0, 8, 0) };
-            combo.Items.AddRange(values.ToArray()); combo.SelectedIndex = 0; return combo;
+            var combo = new V2Combo
+            {
+                Dock = DockStyle.Fill, Height = Theme.ControlHeight,
+                Font = Theme.BodyFont, Margin = Padding.Empty
+            };
+            combo.Items.AddRange(values.ToArray());
+            combo.SelectedIndex = combo.Items.Count == 0 ? -1 : 0;
+            return combo;
         }
-        private static void AddLabel(TableLayoutPanel row, int col, string text) { row.Controls.Add(new Label { Text = text, Dock = DockStyle.Fill, ForeColor = DarkPalette.Muted, TextAlign = ContentAlignment.MiddleLeft, Margin = new Padding(0, 0, 4, 0) }, col, 0); }
+        internal static TableLayoutPanel FilterGroup(string title, Control field, int labelWidth)
+        {
+            var group = new TableLayoutPanel
+            {
+                ColumnCount = 3, RowCount = 1, Dock = DockStyle.Fill,
+                Margin = Padding.Empty, Padding = Padding.Empty,
+                BackColor = Theme.Window
+            };
+            group.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, labelWidth));
+            group.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.Space8));
+            group.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            group.Controls.Add(new Label
+            {
+                Text = title, ForeColor = Theme.SecondaryText,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Dock = DockStyle.Fill, Margin = Padding.Empty,
+                Font = Theme.BodyFont
+            }, 0, 0);
+            field.Dock = DockStyle.Fill;
+            field.Margin = Padding.Empty;
+            group.Controls.Add(field, 2, 0);
+            return group;
+        }
+        internal static TableLayoutPanel Footer(Button cancel, Button add)
+        {
+            var footer = new TableLayoutPanel
+            {
+                Name = "layoutDialogFooter", Dock = DockStyle.Fill,
+                Margin = Padding.Empty, Padding = Padding.Empty,
+                BackColor = Theme.Window, ColumnCount = 4, RowCount = 4
+            };
+            footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.FooterButtonWidth));
+            footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.Space8));
+            footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, Theme.FooterButtonWidth));
+            footer.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.BorderWidth));
+            footer.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space16));
+            footer.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ActionHeight));
+            footer.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space16));
+            var divider = new Panel
+            {
+                BackColor = Theme.Divider, Dock = DockStyle.Fill, Margin = Padding.Empty
+            };
+            footer.Controls.Add(divider, 0, 0);
+            footer.SetColumnSpan(divider, 4);
+            cancel.Height = add.Height = Theme.ActionHeight;
+            cancel.Margin = add.Margin = Padding.Empty;
+            cancel.Dock = add.Dock = DockStyle.Fill;
+            footer.Controls.Add(cancel, 1, 2);
+            footer.Controls.Add(add, 3, 2);
+            return footer;
+        }
         internal static DataGridView MakeGrid()
         {
-            var grid = new DataGridView { Dock = DockStyle.Fill, BackgroundColor = DarkPalette.Surface, BorderStyle = BorderStyle.None, GridColor = DarkPalette.Border, AllowUserToAddRows = false, AllowUserToDeleteRows = false, AllowUserToResizeRows = false, ReadOnly = true, MultiSelect = false, SelectionMode = DataGridViewSelectionMode.FullRowSelect, RowHeadersVisible = false, AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill, EnableHeadersVisualStyles = false, ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None, CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal, ColumnHeadersHeight = 34, RowTemplate = { Height = 36 } };
-            grid.AdvancedColumnHeadersBorderStyle.All = DataGridViewAdvancedCellBorderStyle.None;
-            grid.ColumnHeadersDefaultCellStyle.BackColor = DarkPalette.Surface; grid.ColumnHeadersDefaultCellStyle.ForeColor = DarkPalette.Muted;
-            // Selecting a data cell must not paint its column header in the Windows accent color.
-            grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = DarkPalette.Surface;
-            grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = DarkPalette.Muted;
-            grid.DefaultCellStyle.BackColor = DarkPalette.Surface; grid.DefaultCellStyle.ForeColor = DarkPalette.Foreground; grid.DefaultCellStyle.SelectionBackColor = DarkPalette.Selection; grid.DefaultCellStyle.SelectionForeColor = DarkPalette.Foreground; grid.DefaultCellStyle.Padding = new Padding(8, 0, 8, 0);
-            NativeDarkTheme.ApplyOnHandleCreated(grid, "DarkMode_Explorer"); NativeDarkTheme.ApplyScrollBarsOnHandleCreated(grid, "DarkMode_Explorer");
-            return grid;
+            return new DarkDataGridView
+            {
+                Dock = DockStyle.Fill, Margin = Padding.Empty,
+                ReadOnly = true, MultiSelect = false,
+                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None
+            };
         }
     }
 
