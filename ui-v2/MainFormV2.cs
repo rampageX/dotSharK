@@ -182,7 +182,11 @@ namespace dotSharK
                 };
                 configButton = GhostButton("配置…", Theme.Space24 * 4 + Theme.Space16);
                 configButton.Name = "btnSettings";
-                configButton.Dock = DockStyle.Fill;
+                // Keep this secondary button 32px tall inside the 48px
+                // header row; horizontal right and vertical center alignment.
+                configButton.Dock = DockStyle.None;
+                configButton.Anchor = AnchorStyles.Right;
+                configButton.Height = Theme.ControlHeight;
                 configButton.Click += OpenConfiguration;
                 brand.Controls.Add(logo, 0, 0);
                 brand.Controls.Add(tagline, 2, 0);
