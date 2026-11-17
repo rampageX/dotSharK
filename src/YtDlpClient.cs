@@ -167,6 +167,7 @@ namespace dotSharK
                 "--no-playlist", "--playlist-items", "1", "--newline", "--progress",
                 "-P", folder, "-o", "%(title)s [%(id)s].%(ext)s",
                 "--download-archive", archivePath,
+                "--print", "before_dl:dotSharKTitle=%(title)s",
                 "-f", "bv*+ba/b", "--format-sort-force",
                 "-S", "res,fps,hdr,vcodec,br"
             });
