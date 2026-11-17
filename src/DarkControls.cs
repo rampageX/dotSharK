@@ -78,12 +78,14 @@ namespace dotSharK
         protected override void OnEnabledChanged(EventArgs e) { base.OnEnabledChanged(e); ApplyStyle(); }
         private void ApplyStyle()
         {
-            BackColor = Primary ? (attentionHighlight && Enabled ? Color.FromArgb(49, 185, 123) : DarkPalette.Accent) : DarkPalette.Surface;
+            Color accent = attentionHighlight && Enabled ? Color.FromArgb(49, 185, 123) : DarkPalette.Accent;
+            BackColor = Primary ? accent : DarkPalette.Surface;
             ForeColor = DarkPalette.Foreground;
             FlatAppearance.BorderSize = Primary ? 0 : 1;
             FlatAppearance.BorderColor = DarkPalette.Border;
-            FlatAppearance.MouseOverBackColor = Primary ? ControlPaint.Light(DarkPalette.Accent, 0.16F) : Color.FromArgb(55, 55, 55);
-            FlatAppearance.MouseDownBackColor = Primary ? ControlPaint.Dark(DarkPalette.Accent, 0.16F) : Color.FromArgb(47, 47, 47);
+            // Keep the attention pulse visible even while the pointer is over the button.
+            FlatAppearance.MouseOverBackColor = Primary ? ControlPaint.Light(accent, 0.16F) : Color.FromArgb(55, 55, 55);
+            FlatAppearance.MouseDownBackColor = Primary ? ControlPaint.Dark(accent, 0.16F) : Color.FromArgb(47, 47, 47);
         }
     }
 
