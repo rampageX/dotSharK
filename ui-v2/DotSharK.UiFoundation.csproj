@@ -41,6 +41,7 @@
     <Compile Include="DarkMessageBox.cs" />
     <Compile Include="DarkListView.cs" />
     <Compile Include="DarkDataGridView.cs" />
+    <Compile Include="DarkProgressIndicator.cs" />
     <Compile Include="DarkContextMenuRenderer.cs" />
     <Compile Include="DarkComboBox.cs" />
     <Compile Include="DarkCheckBox.cs" />
