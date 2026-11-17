@@ -55,7 +55,9 @@ namespace dotSharK.UiV2
 
         private readonly ItemCollection items;
         private int selectedIndex = -1;
-        private bool hovered, suppressUpdate;
+        private bool hovered, suppressUpdate, syncingEditor;
+        private ComboBoxStyle dropDownStyle = ComboBoxStyle.DropDownList;
+        private TextBox editableText;
         private ToolStripDropDown popup;
         private PopupView view;
         private DarkScrollBar scrollbar;
@@ -78,7 +80,59 @@ namespace dotSharK.UiV2
             AccessibleRole = AccessibleRole.ComboBox;
         }
         public ItemCollection Items { get { return items; } }
-        public ComboBoxStyle DropDownStyle { get; set; } = ComboBoxStyle.DropDownList;
+        public ComboBoxStyle DropDownStyle
+        {
+            get { return dropDownStyle; }
+            set
+            {
+                if (dropDownStyle == value) return;
+                dropDownStyle = value;
+                if (value == ComboBoxStyle.DropDown)
+                {
+                    editableText = new TextBox
+                    {
+                        BorderStyle = BorderStyle.None,
+                        BackColor = Theme.Input, ForeColor = Theme.PrimaryText,
+                        Font = Font, Margin = Padding.Empty
+                    };
+                    editableText.Text = SelectedItem == null ? "" : SelectedItem.ToString();
+                    editableText.TextChanged += (s, e) =>
+                    {
+                        if (syncingEditor) return;
+                        selectedIndex = -1;
+                        base.OnTextChanged(e);
+                    };
+                    editableText.KeyDown += (s, e) =>
+                    {
+                        if (e.KeyCode == Keys.Down && e.Alt) { OpenPopup(); e.Handled = true; }
+                        else if (e.KeyCode == Keys.Escape && DroppedDown)
+                            { ClosePopup(); e.Handled = true; e.SuppressKeyPress = true; }
+                    };
+                    DarkTextContextMenu.Create(editableText);
+                    Controls.Add(editableText);
+                    LayoutEditor();
+                }
+                else if (editableText != null)
+                {
+                    var old = editableText;
+                    editableText = null;
+                    Controls.Remove(old);
+                    old.Dispose();
+                }
+                Invalidate();
+            }
+        }
+        private void LayoutEditor()
+        {
+            if (editableText == null) return;
+            editableText.Bounds = new Rectangle(Theme.Space8,
+                Math.Max(0, (Height - editableText.PreferredHeight) / 2),
+                Math.Max(0, Width - Theme.ArrowRegionWidth - Theme.Space16),
+                editableText.PreferredHeight);
+        }
+        protected override void OnResize(EventArgs e) { base.OnResize(e); LayoutEditor(); }
+        protected override void OnFontChanged(EventArgs e)
+        { base.OnFontChanged(e); if (editableText != null) { editableText.Font = Font; LayoutEditor(); } }
         public bool Sorted { get; set; }
         public int MaxDropDownItems { get; set; } = 8;
         public int DropDownWidth { get; set; }
@@ -91,6 +145,12 @@ namespace dotSharK.UiV2
                 if (value < -1 || value >= items.Count) throw new ArgumentOutOfRangeException("value");
                 if (selectedIndex == value) return;
                 selectedIndex = value;
+                if (editableText != null)
+                {
+                    syncingEditor = true;
+                    editableText.Text = SelectedItem == null ? "" : SelectedItem.ToString();
+                    syncingEditor = false;
+                }
                 Invalidate();
                 if (SelectedIndexChanged != null) SelectedIndexChanged(this, EventArgs.Empty);
                 base.OnTextChanged(EventArgs.Empty);
@@ -103,7 +163,11 @@ namespace dotSharK.UiV2
         }
         public override string Text
         {
-            get { return SelectedItem == null ? "" : SelectedItem.ToString(); }
+            get
+            {
+                return editableText != null ? editableText.Text :
+                    SelectedItem == null ? "" : SelectedItem.ToString();
+            }
             set
             {
                 string text = value ?? "";
@@ -112,6 +176,7 @@ namespace dotSharK.UiV2
                     if (String.Equals(Convert.ToString(items[i]), text, StringComparison.Ordinal))
                     { match = i; break; }
                 SelectedIndex = match;
+                if (editableText != null && match < 0) editableText.Text = text;
             }
         }
         public bool DroppedDown { get { return popup != null && popup.Visible; } set { if (value) OpenPopup(); else ClosePopup(); } }
@@ -141,8 +206,9 @@ namespace dotSharK.UiV2
                 e.Graphics.DrawLine(pen, arrow.Left, 1, arrow.Left, Height - 2);
             var rect = new Rectangle(Theme.Space8, 0,
                 Math.Max(0, Width - Theme.ArrowRegionWidth - 2 * Theme.Space8), Height);
-            DarkPaint.DrawText(e.Graphics, Text, Font, rect,
-                Enabled ? Theme.PrimaryText : Theme.DisabledText);
+            if (editableText == null)
+                DarkPaint.DrawText(e.Graphics, Text, Font, rect,
+                    Enabled ? Theme.PrimaryText : Theme.DisabledText);
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             int centerX = arrow.Left + arrow.Width / 2, centerY = Height / 2;
             using (var brush = new SolidBrush(Enabled ? Theme.SecondaryText : Theme.DisabledText))
@@ -157,6 +223,8 @@ namespace dotSharK.UiV2
         {
             base.OnMouseDown(e);
             if (!Enabled || e.Button != MouseButtons.Left) return;
+            if (editableText != null && e.X < Width - Theme.ArrowRegionWidth)
+                { editableText.Focus(); return; }
             Focus();
             if (DroppedDown) ClosePopup(); else OpenPopup();
         }
