@@ -31,5 +31,5 @@
 - 详细日志：`%LOCALAPPDATA%\dotSharK\SilentQueue\silent-download.log`
 - 已下载媒体清单：`%LOCALAPPDATA%\dotSharK\SilentQueue\downloaded.txt`
 
-这是**独立后台队列**，不会出现在当前 dotSharK 主窗口的手动下载列表里。
+这是**独立后台队列**，不会混进主窗口的手动下载列表；点击主界面的「静默下载」可查看状态。浏览器右键时不会主动弹出主窗口或抢占焦点。
 失败写入日志，不弹窗。浏览器扩展遇到 Native Messaging 错误时可在扩展的 Service Worker 控制台检查。
