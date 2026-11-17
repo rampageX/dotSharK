@@ -166,13 +166,28 @@ namespace dotSharK
             t.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             return t;
         }
+        // 32px fields in a 44px row: the lower 12px belongs to spacing,
+        // never to the control itself. Same rule across all settings pages.
+        private static Control SpacedRow(Control content)
+        {
+            var frame = new TableLayoutPanel {
+                Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2,
+                BackColor = Theme.Window, Margin = Padding.Empty, Padding = Padding.Empty
+            };
+            frame.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight));
+            frame.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space12));
+            content.Dock = DockStyle.Fill;
+            content.Margin = Padding.Empty;
+            frame.Controls.Add(content, 0, 0);
+            return frame;
+        }
         private static void SettingRow(TableLayoutPanel table, int index, string text, Control field)
         {
             table.RowStyles.Add(new RowStyle(SizeType.Absolute,
                 Theme.ControlHeight + Theme.Space12));
-            table.Controls.Add(Label(text), 0, index);
-            field.Margin = Padding.Empty;
-            table.Controls.Add(field, 1, index);
+            var body = Row(Fixed(Theme.LabelColumnWidth, Label(text)), Fill(field));
+            table.Controls.Add(SpacedRow(body), 0, index);
+            table.SetColumnSpan(table.GetControlFromPosition(0, index), 2);
         }
         private sealed class RowPart
         {
@@ -268,7 +283,7 @@ namespace dotSharK
                     Fixed(Theme.BrowseButtonWidth, browse), Fixed(Theme.Space8),
                     Fixed(Theme.IconButtonSize, stable), Fixed(Theme.Space8),
                     Fixed(Theme.IconButtonSize, nightly));
-                content.Controls.Add(row, 0, rowIndex);
+                content.Controls.Add(SpacedRow(row), 0, rowIndex);
             }
             content.RowStyles.Add(new RowStyle(SizeType.Absolute,
                 Theme.Space16 + Theme.Space12 * 3));
@@ -451,7 +466,7 @@ namespace dotSharK
             profileStatus.Name = "lblProfileStatus";
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute,
                 Theme.ControlHeight + Theme.Space12));
-            grid.Controls.Add(profileStatus, 1, 8);
+            grid.Controls.Add(SpacedRow(profileStatus), 1, 8);
 
             cookieFileBox = StyledTextBox(Options.CookieFile);
             cookieFileBox.Name = "txtCookieFile";
@@ -474,7 +489,7 @@ namespace dotSharK
                 Fill(null)));
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute,
                 Theme.ControlHeight + Theme.Space12));
-            grid.Controls.Add(Note("默认前三个不同分辨率档位；0 为不限制。同分辨率的不同编码、HDR 选项均保留。"), 1, 11);
+            grid.Controls.Add(SpacedRow(Note("默认前三个不同分辨率档位；0 为不限制。同分辨率的不同编码、HDR 选项均保留。")), 1, 11);
             Scrolled(page, grid);
 
             // Keep the original async search and save event handlers unchanged.
