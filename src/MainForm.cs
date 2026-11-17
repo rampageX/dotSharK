@@ -410,7 +410,10 @@ namespace dotSharK
                                 using (var linkedToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
                                 {
                                 itemCancellation[item] = linkedToken;
-                                var itemProgress = new ItemDownloadProgress();
+                                var itemProgress = new ItemDownloadProgress
+                                {
+                                    StageCount = ExpectedTransferStages(item)
+                                };
                                 Action<string> output = lineText =>
                                 {
                                     AppendLog("[" + item.Title + "] " + lineText);
@@ -543,10 +546,42 @@ namespace dotSharK
 
         private sealed class ItemDownloadProgress
         {
+            internal readonly object Sync = new object();
             internal int StageCount = 1;
             internal int StageIndex;
             internal double LastPercent;
             internal bool HasPercent;
+            internal string AriaGid;
+        }
+
+        // The item owns this parser, not the global queue: yt-dlp and aria2c
+        // may run concurrently, and even one item can report both formats.
+        internal static int ExpectedTransferStages(DownloadQueueItem item)
+        {
+            if (item == null || item.AudioOnly) return 1;
+            if (item.BrowserSilent || item.PlaylistItem) return 2;
+            return item.Video != null && !item.Video.HasAudio ? 2 : 1;
+        }
+
+        internal static bool TryParseTransferProgress(string line, out double percent, out string ariaGid)
+        {
+            percent = 0;
+            ariaGid = null;
+            if (String.IsNullOrWhiteSpace(line)) return false;
+            // Prefer yt-dlp's completed stream on a combined line such as:
+            // [#fdb514 23MiB/31MiB(74%) ...][download] 100% of 31.88MiB ...
+            var native = Regex.Match(line, @"\[download\]\s*(?<value>\d+(?:[.,]\d+)?)%\s+of\b",
+                RegexOptions.IgnoreCase);
+            // aria2c can report GID, transfer bytes, and progress on every CR.
+            var aria = Regex.Match(line,
+                @"\[#(?<gid>[0-9a-fA-F]{6,})\s+[^\]\r\n]*?\((?<value>\d+(?:[.,]\d+)?)%\)",
+                RegexOptions.IgnoreCase);
+            if (aria.Success) ariaGid = aria.Groups["gid"].Value;
+            var selected = native.Success ? native : aria;
+            if (!selected.Success) return false;
+            return Double.TryParse(selected.Groups["value"].Value.Replace(',', '.'),
+                NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out percent)
+                && percent >= 0 && percent <= 100;
         }
 
         private void ReportDownloadLine(DownloadQueueItem item, ItemDownloadProgress state, string lineText)
@@ -570,18 +605,57 @@ namespace dotSharK
                 }
                 return;
             }
-            var formatMatch = Regex.Match(lineText, @"Downloading\s+\d+\s+format\(s\):\s*(.+)$", RegexOptions.IgnoreCase);
-            if (formatMatch.Success) state.StageCount = Math.Max(1, formatMatch.Groups[1].Value.Count(c => c == '+') + 1);
-            var match = Regex.Match(lineText, @"(?:^|\s)(\d+(?:[.,]\d+)?)%\s+of\b", RegexOptions.IgnoreCase);
-            if (!match.Success) return;
+
             double percent;
-            if (!Double.TryParse(match.Groups[1].Value.Replace(',', '.'), NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out percent)) return;
-            if (state.HasPercent && percent + 5 < state.LastPercent && state.LastPercent >= 70 && state.StageIndex < state.StageCount - 1)
-                state.StageIndex++;
-            state.LastPercent = percent;
-            state.HasPercent = true;
-            double itemFraction = Math.Min(0.995, (state.StageIndex + Math.Max(0, Math.Min(100, percent)) / 100.0) / Math.Max(1, state.StageCount));
-            SetItemProgress(item, itemFraction, itemFraction * 100);
+            string ariaGid;
+            if (!TryParseTransferProgress(lineText, out percent, out ariaGid))
+            {
+                var count = Regex.Match(lineText,
+                    @"Downloading\s+(\d+)\s+format\(s\):",
+                    RegexOptions.IgnoreCase);
+                if (count.Success)
+                {
+                    int stages;
+                    if (Int32.TryParse(count.Groups[1].Value, out stages))
+                        lock (state.Sync) state.StageCount = Math.Max(1, Math.Min(32, stages));
+                }
+                return;
+            }
+
+            double fraction;
+            lock (state.Sync)
+            {
+                if (!String.IsNullOrWhiteSpace(ariaGid))
+                {
+                    if (!String.IsNullOrWhiteSpace(state.AriaGid) &&
+                        !String.Equals(ariaGid, state.AriaGid, StringComparison.OrdinalIgnoreCase) &&
+                        state.StageIndex < state.StageCount - 1)
+                    {
+                        // New aria2c GID means yt-dlp started the next format
+                        // (typically video, then audio), even if its preceding
+                        // "Downloading 2 formats" message was suppressed.
+                        state.StageIndex++;
+                        state.HasPercent = false;
+                    }
+                    state.AriaGid = ariaGid;
+                }
+                else if (state.HasPercent && percent + 5 < state.LastPercent &&
+                         state.LastPercent >= 70 && state.StageIndex < state.StageCount - 1)
+                {
+                    // yt-dlp's native downloader uses the same format progress
+                    // syntax for consecutive video and audio, but no aria2c GID.
+                    state.StageIndex++;
+                    state.HasPercent = false;
+                }
+
+                state.LastPercent = percent;
+                state.HasPercent = true;
+                // Never report 100% before yt-dlp exits successfully, because
+                // postprocessing and muxing may still be running.
+                fraction = Math.Min(0.995,
+                    (state.StageIndex + percent / 100.0) / Math.Max(1, state.StageCount));
+            }
+            SetItemProgress(item, fraction, fraction * 100);
         }
 
         private void SetItemProgress(DownloadQueueItem item, double fraction, double itemPercent)
@@ -592,10 +666,11 @@ namespace dotSharK
                 BeginInvoke((Action)(() =>
                 {
                     if (IsDisposed || !currentRunProgress.ContainsKey(item)) return;
-                    currentRunProgress[item] = Math.Max(currentRunProgress[item], Math.Max(0, Math.Min(1, fraction)));
-                    item.ProgressPercent = itemPercent;
+                    double highWater = Math.Max(currentRunProgress[item], Math.Max(0, Math.Min(1, fraction)));
+                    currentRunProgress[item] = highWater;
+                    item.ProgressPercent = highWater * 100;
                     UpdateQueueRow(item);
-                    UpdateQueueProgressDisplay(item, itemPercent);
+                    UpdateQueueProgressDisplay(item, item.ProgressPercent);
                 }));
             }
             catch (InvalidOperationException) { }
