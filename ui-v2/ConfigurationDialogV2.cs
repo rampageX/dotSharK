@@ -577,8 +577,8 @@ namespace dotSharK
                 Fixed(Theme.BrowseButtonWidth, browse)), 0, 2);
             silentResolutionBox = StyledCombo(new object[] { "最高", "8K", "4K", "1080p", "720p" });
             silentResolutionBox.Name = "cboSilentMaxResolution";
-            int selected = Array.IndexOf(SilentHeightOptions, Options.SilentMaxHeight);
-            silentResolutionBox.SelectedIndex = selected < 0 ? 0 : selected;
+            int resolutionIndex = Array.IndexOf(SilentHeightOptions, Options.SilentMaxHeight);
+            silentResolutionBox.SelectedIndex = resolutionIndex < 0 ? 0 : resolutionIndex;
             content.Controls.Add(Row(
                 Fixed(Theme.LabelColumnWidth, Label("最高分辨率")),
                 Fixed(Theme.Space24 * 8 + Theme.Space8, silentResolutionBox),
