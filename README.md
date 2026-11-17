@@ -1,4 +1,4 @@
-# dotSharK 1.0.2
+# dotSharK 1.0.3
 
 dotSharK 是一个轻量的 Windows yt-dlp 图形外壳，使用 **C#、WinForms 和 .NET Framework 4.8** 编写。程序使用暗色界面和绿色强调色，实际解析与下载由用户选择的 yt-dlp 完成。
 
@@ -39,6 +39,15 @@ dotnet build src\dotSharK.csproj -c Release
 ```
 
 构建输出位于 `src\bin\Release\dotSharK.exe`。项目不依赖 Visual Studio IDE。
+
+## 1.0.3 更新内容
+
+- 自绘下拉框支持鼠标悬停高亮，长格式名称提供完整提示；调整播放列表统一质量选项布局。
+- 视频质量限制可在 YT-DLP 配置中调整：默认三个不同分辨率档，设置为 0 展示所有档位（保留每档不同编码与 HDR 选项）。
+- 播放列表选择窗口首次宽度改为 1200px；主窗口和播放列表选择窗口会保存大小、位置和最大化状态。
+- 修复两个质量列表点击数据行时表头出现 Windows 蓝色高亮。
+- 修正主界面底栏位置、视频质量限制标签垂直对齐。
+- 修复 FFmpeg / FFprobe Nightly 版本识别与 FFmpeg-Builds 仓库迁移导致的更新检查错误。
 
 ## 1.0.2 更新内容
 
