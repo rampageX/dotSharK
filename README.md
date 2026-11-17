@@ -17,6 +17,8 @@ dotSharK 是一个轻量的 Windows yt-dlp 图形外壳，使用 **C#、WinForms
 - YT-DLP 页可设置 HTTP(S)/SOCKS 代理、地域验证代理、分片并发、同时下载数和 Cookie 来源；两个代理各有独立「启用」开关，关闭后保留地址，旧 INI 默认启用。
 - 外部工具可指定 `aria2c.exe`；「高级下载」可填写按原网页 URL 域名匹配的 aria2c 站点（空格/换行分隔，例如 `youtube.com *.example.com`，普通域名默认包含所有子域名）。
 - 「高级下载」可填 yt-dlp 原生命令行参数，支持带引号的参数值；同名参数会替换 dotSharK 自动参数，分析与下载均生效。
+- 「高级下载 → 以下站点不使用代理」可按域名指定直连站点（例如 `bilibili.com`，自动覆盖所有子域名，按输入网页 URL 而非视频 CDN 匹配）。命中后跳过主代理、地域验证代理；如该站点也使用 aria2c，则显式覆盖 aria2c 的代理配置，保留其它 aria2c 设置。此规则优先于自定义 yt-dlp 的代理项。
+- 中文输出改为原始字节解码：优先严格 UTF-8，若无效则尝试 GB18030，兼容 Windows 平台 yt-dlp/aria2c 的不同控制台编码，避免视频标题与日志出现 `����`。
 - Cookie 可从浏览器配置或 Netscape 格式的 Cookie 文件读取。浏览器配置支持递归搜索；找到多个配置时优先选择 Cookie 数据库最新的一个。
 - 代理配置使用当前 Windows 用户的 DPAPI 加密后保存在 EXE 同级 `dotSharK.ini`。
 - 下载目录可自定义；留空时保存到 EXE 同级的 `Downloads` 目录。
