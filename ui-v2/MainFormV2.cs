@@ -918,23 +918,6 @@ namespace dotSharK
             }
             return playlist.Entries.Count == 0 ? url : playlist.Entries[0].Url;
         }
-        private sealed class DarkContextMenuRenderer : ToolStripProfessionalRenderer
-        {
-            internal DarkContextMenuRenderer() : base(new DarkContextMenuColors()) { RoundedEdges = false; }
-            protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
-            {
-                using (var pen = new Pen(DarkPalette.Border)) e.Graphics.DrawRectangle(pen, 0, 0, e.ToolStrip.Width - 1, e.ToolStrip.Height - 1);
-            }
-        }
-        private sealed class DarkContextMenuColors : ProfessionalColorTable
-        {
-            public override Color ToolStripDropDownBackground { get { return DarkPalette.Surface; } }
-            public override Color MenuBorder { get { return DarkPalette.Border; } }
-            public override Color MenuItemSelected { get { return DarkPalette.Selection; } }
-            public override Color ImageMarginGradientBegin { get { return DarkPalette.Surface; } }
-            public override Color ImageMarginGradientMiddle { get { return DarkPalette.Surface; } }
-            public override Color ImageMarginGradientEnd { get { return DarkPalette.Surface; } }
-        }
         private void AddQueueItem(DownloadQueueItem item)
         {
             queueItems.Add(item);
