@@ -289,16 +289,24 @@ namespace dotSharK.UiV2
         {
             if (!Enabled || items.Count == 0 || DroppedDown) return;
             ClosePopup();
+            int visible = Math.Min(items.Count, Math.Max(1, MaxDropDownItems));
+            bool needsScrollbar = items.Count > visible;
             int longest = items.Max(x => TextRenderer.MeasureText(Convert.ToString(x), Font).Width);
             int width = Math.Max(Math.Max(Width, DropDownWidth),
-                longest + Theme.Space24 + Theme.ScrollbarWidth);
+                longest + Theme.Space24 + (needsScrollbar ? Theme.ScrollbarWidth : 0));
             Rectangle work = Screen.FromControl(this).WorkingArea;
             width = Math.Min(width, work.Width);
-            int visible = Math.Min(items.Count, Math.Max(1, MaxDropDownItems));
             int height = visible * Theme.ControlHeight + 2;
 
             view = new PopupView(this) { Dock = DockStyle.Fill, BackColor = Theme.Input };
-            scrollbar = new DarkScrollBar { Dock = DockStyle.Right };
+            // Keep the scroll position model for wheel/keyboard navigation, but
+            // never reserve or paint a scrollbar when every item fits.
+            scrollbar = new DarkScrollBar
+            {
+                Dock = DockStyle.Right,
+                Visible = needsScrollbar,
+                Enabled = needsScrollbar
+            };
             scrollbar.LargeChange = visible;
             scrollbar.Maximum = Math.Max(0, items.Count - visible);
             scrollbar.Value = Math.Max(0, Math.Min(scrollbar.Maximum, selectedIndex));
