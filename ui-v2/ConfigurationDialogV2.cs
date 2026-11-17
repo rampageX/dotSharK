@@ -202,7 +202,7 @@ namespace dotSharK
                 {
                     p.Control.Dock = DockStyle.Fill;
                     p.Control.Margin = Padding.Empty;
-                    t.Controls.Add(p.Control, column);
+                    t.Controls.Add(p.Control, column, 0);
                 }
                 column++;
             }
