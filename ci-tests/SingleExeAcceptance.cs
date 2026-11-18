@@ -98,7 +98,9 @@ internal static class SingleExeAcceptance
                 using (var reader = new BinaryReader(process.StandardOutput.BaseStream, Encoding.UTF8))
                 {
                     int length = reader.ReadInt32();
-                    Check(Encoding.UTF8.GetString(reader.ReadBytes(length)).Contains("\"ok\":true"), "Firefox native messaging ping succeeds");
+                    string reply = Encoding.UTF8.GetString(reader.ReadBytes(length));
+                    Console.WriteLine("Firefox ping reply: " + reply);
+                    Check(reply.Contains("\"ok\":true"), "Firefox native messaging ping succeeds");
                 }
                 Check(process.WaitForExit(10000) && process.ExitCode == 0, "Firefox native host exits cleanly");
             }
