@@ -1,8 +1,9 @@
-# Firefox 系插件测试版
+# Firefox / Floorp 浏览器插件
 
-1. 解压完整测试包，退出正在运行的 dotSharK，用其中 dotSharK.exe 覆盖现有程序。
-2. 在 Firefox 地址栏打开 `about:debugging#/runtime/this-firefox`，点击「临时载入附加组件」，选择此目录的 `manifest.json`。Floorp 如支持相同调试页面，也可使用此方法。
-3. 点击插件图标，复制配对码；在 dotSharK 的「配置 → 插件注册」选择 Firefox 或 Floorp，粘贴并注册，回到插件点击「检测连接」。
-4. 在网页、视频或链接上右键，选择「发送到 dotSharK（静默下载）」。链接右键发送目标，页面和视频右键发送所在网页地址。
+1. 在 Firefox 中打开附加组件管理器（`about:addons`），通过齿轮菜单“从文件安装附加组件”，选择本目录的 `dotSharK_Firefox_AMO-0.1.1.xpi`。
+2. 点击插件图标，复制配对码；在 dotSharK 的“配置 → 插件注册”中选择 Firefox 或 Floorp，粘贴并注册，回到插件点击“检测连接”。
+3. 在网页、视频或链接上右键，选择“发送到 dotSharK（静默下载）”。
 
-Firefox 正式版只允许永久安装经过 Mozilla 签名的扩展；本测试包尚未签名，临时加载的扩展在浏览器退出后需要重新加载。不同 Firefox 衍生浏览器的签名及临时加载政策可能不同。程序移动位置后，请在 dotSharK 中重新注册。
+XPI 已经 Mozilla 签名，可在 Firefox 140 及以上安装；无需临时加载，重启浏览器后保留。Firefox 系衍生浏览器的兼容性以实际测试为准。插件将用户主动选取的网页或链接地址发送给本机 dotSharK，插件本身不向远程服务器上传。程序移动目录后请重新注册。
+
+此目录也包含插件源码；XPI 是签名文件，请勿修改内部内容。当前版本未配置自动更新地址，后续升级需安装新的签名 XPI。
