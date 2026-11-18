@@ -41,6 +41,7 @@ internal static class UiV2Stage6Acceptance
             var playlist = Playlist();
             using (var main = NewForm("MainFormV2"))
             {
+                Check(main.Text.Contains("v" + main.GetType().Assembly.GetName().Version.ToString(3)), "main title displays application assembly version");
                 Show(main);
                 Check(Find<DataGridView>(main, "gridQueue") is DarkDataGridView, "production queue uses V2 dark grid");
                 Check(Find<FlatTextArea>(main, "txtLog") != null, "production log uses V2 dark editor");
@@ -92,7 +93,7 @@ internal static class UiV2Stage6Acceptance
                 Show(settings);
                 var tabs = Find<DarkTabStrip>(settings, "tabSettings");
                 Check(tabs.Pages.Count == 5, "five integrated settings pages");
-                for (int i = 0; i < 4; ++i)
+                for (int i = 0; i < 5; ++i)
                 {
                     tabs.SelectedIndex = i;
                     Application.DoEvents();
@@ -378,6 +379,10 @@ internal static class UiV2Stage6Acceptance
     {
         Check((bool)Static("SilentDownloadBridge", "IsNativeHostCall",
             (object)new[] { "chrome-extension://test/" }), "native messaging entry point recognized");
+        Check((bool)Static("SilentDownloadBridge", "IsNativeHostCall",
+            (object)new[] { @"C:\dotSharK\BrowserExtension\NativeMessaging\firefox\com.rampagex.dotshark.json", "dotshark@rampagex.github.io" }), "Firefox native messaging entry point recognized");
+        Check(!(bool)Static("SilentDownloadBridge", "IsNativeHostCall",
+            (object)new[] { @"C:\dotSharK\com.rampagex.dotshark.json", "unrelated@example.org" }), "unrelated add-on ID rejected");
         Check((string)Static("SilentDownloadBridge", "ValidatePageUrl",
             "https://example.com/watch?v=1") != null, "native messaging HTTP URL accepted");
         Check(Static("SilentDownloadBridge", "ValidatePageUrl",

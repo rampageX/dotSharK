@@ -75,7 +75,7 @@ internal static class SingleExeAcceptance
                 byte[] payload = Encoding.UTF8.GetBytes("{\"url\":\"file:///invalid\"}");
                 process.StandardInput.BaseStream.Write(BitConverter.GetBytes(payload.Length), 0, 4);
                 process.StandardInput.BaseStream.Write(payload, 0, payload.Length);
-                process.StandardInput.Close();
+                process.StandardInput.BaseStream.Flush();
                 using (var reader = new BinaryReader(process.StandardOutput.BaseStream, Encoding.UTF8))
                 {
                     int length = reader.ReadInt32();

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -40,10 +41,12 @@ namespace dotSharK
         internal static bool IsNativeHostCall(string[] args)
         {
             return args != null && args.Length > 0 &&
-                args[0].StartsWith("chrome-extension://", StringComparison.OrdinalIgnoreCase);
+                (args[0].StartsWith("chrome-extension://", StringComparison.OrdinalIgnoreCase) ||
+                 (args.Length >= 2 && args[1] == BrowserPairing.FirefoxId &&
+                  String.Equals(Path.GetFileName(args[0]), BrowserPairing.Host + ".json", StringComparison.OrdinalIgnoreCase)));
         }
 
-        internal static void RunNativeHost()
+        internal static void RunNativeHost(bool firefox)
         {
             object response;
             try
@@ -60,7 +63,7 @@ namespace dotSharK
                 url = ValidatePageUrl(url);
                 if (url == null) throw new InvalidDataException("必须发送单个 HTTP/HTTPS 网页链接。");
                 bool duplicate = Enqueue(url);
-                bool launched = StartHostProcess();
+                bool launched = StartHostProcess(firefox);
                 response = new { ok = launched, duplicate = duplicate,
                     error = launched ? "" : "任务已保存，但 dotSharK 后台进程启动失败。" };
             }
@@ -141,10 +144,11 @@ namespace dotSharK
             return false;
         }
 
-        private static bool StartHostProcess()
+        private static bool StartHostProcess(bool firefox)
         {
             try
             {
+                if (firefox) return StartDetachedWorker();
                 var info = new ProcessStartInfo
                 {
                     FileName = Process.GetCurrentProcess().MainModule.FileName,
@@ -157,6 +161,33 @@ namespace dotSharK
                 using (Process p = Process.Start(info)) return p != null;
             }
             catch { return false; }
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct StartupInfo
+        {
+            public int cb; public string reserved, desktop, title;
+            public int x, y, xSize, ySize, xCountChars, yCountChars, fillAttribute, flags;
+            public short showWindow, reserved2; public IntPtr reservedPtr, stdInput, stdOutput, stdError;
+        }
+        [StructLayout(LayoutKind.Sequential)]
+        private struct ProcessInformation { public IntPtr process, thread; public int processId, threadId; }
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern bool CreateProcess(string app, StringBuilder command, IntPtr processAttributes,
+            IntPtr threadAttributes, bool inheritHandles, uint flags, IntPtr environment, string directory,
+            ref StartupInfo startup, out ProcessInformation process);
+        [DllImport("kernel32.dll")] private static extern bool CloseHandle(IntPtr handle);
+
+        private static bool StartDetachedWorker()
+        {
+            string exe = Process.GetCurrentProcess().MainModule.FileName;
+            var startup = new StartupInfo { cb = Marshal.SizeOf(typeof(StartupInfo)) };
+            ProcessInformation process;
+            // Firefox owns the native host's job; the resident queue must survive its exit.
+            if (!CreateProcess(exe, new StringBuilder("\"" + exe + "\" --silent-worker"), IntPtr.Zero,
+                IntPtr.Zero, false, 0x01000000 | 0x08000000, IntPtr.Zero,
+                AppDomain.CurrentDomain.BaseDirectory, ref startup, out process)) return false;
+            CloseHandle(process.thread); CloseHandle(process.process); return true;
         }
 
         internal static void RunApplication(bool showMain)

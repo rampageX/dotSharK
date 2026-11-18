@@ -1,4 +1,4 @@
-# dotSharK 1.0.8
+# dotSharK 1.0.9
 
 dotSharK 是一个轻量的 Windows yt-dlp 图形外壳，使用 **C#、WinForms 和 .NET Framework 4.8** 编写。程序使用暗色界面和绿色强调色，实际解析与下载由用户选择的 yt-dlp 完成。
 
@@ -47,6 +47,13 @@ dotnet build src\dotSharK.csproj -c Release
 ```
 
 构建输出位于 `src\bin\Release\dotSharK.exe`。项目不依赖 Visual Studio IDE。
+
+## 1.0.9 更新内容
+
+- 新增 Firefox 系插件与插件注册，提供 Mozilla 签名的 Firefox 0.1.1 XPI，支持 Firefox 140 及以上版本。
+- 修复 Firefox Native Messaging 清单兼容问题，支持与 Chromium 系插件并存。
+- Firefox 和 Chromium 插件新增小鲨鱼图标。
+- 主窗口标题栏显示当前程序版本。
 
 ## 1.0.8 更新内容
 

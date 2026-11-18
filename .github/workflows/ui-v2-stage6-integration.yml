@@ -7,6 +7,7 @@ on:
       - feature/portable-data
       - feature/embedded-ui
       - feature/plugin-pairing
+      - feature/firefox-extension
   workflow_dispatch:
 
 jobs:
@@ -37,10 +38,18 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Single EXE harness compile failed' }
           & ./standalone/SingleExeAcceptance.exe
           if ($LASTEXITCODE -ne 0) { throw 'Single EXE isolation test failed' }
+          & $compiler /nologo /codepage:65001 /r:System.Web.Extensions.dll /out:standalone\\FirefoxPairingAcceptance.exe ci-tests\\FirefoxPairingAcceptance.cs
+          if ($LASTEXITCODE -ne 0) { throw 'Firefox registration harness compile failed' }
+          & ./standalone/FirefoxPairingAcceptance.exe (Resolve-Path standalone/dotSharK.exe).Path
+          if ($LASTEXITCODE -ne 0) { throw 'Firefox registration validation failed' }
+          python ci-tests/FirefoxNativeProtocol.py
+          if ($LASTEXITCODE -ne 0) { throw 'Firefox native protocol test failed' }
       - name: Verify browser link context and Native Host URL routing
         shell: pwsh
         run: |
           node ci-tests/BrowserExtensionAcceptance.js
+          if ($LASTEXITCODE -ne 0) { throw 'Chromium extension regression failed' }
+          node ci-tests/FirefoxExtensionAcceptance.js
           if ($LASTEXITCODE -ne 0) { throw 'Browser extension regression failed' }
       - name: Package single EXE build with browser extension
         shell: pwsh
@@ -49,6 +58,7 @@ jobs:
           New-Item -ItemType Directory -Force package-light | Out-Null
           Copy-Item src\bin\Release\dotSharK.exe package-light\
           Copy-Item BrowserExtension package-light\BrowserExtension -Recurse
+          Copy-Item BrowserExtensionFirefox package-light\BrowserExtensionFirefox -Recurse
           Copy-Item README.md,LICENSE package-light\
           Compress-Archive -Path package-light\* -DestinationPath dotSharK_UIV2_Lightweight_Windows.zip -Force
       - uses: actions/upload-artifact@v4
@@ -171,7 +181,7 @@ jobs:
           path: dotSharK_UI_V2_Stage6_Integrated_Windows.zip
           if-no-files-found: error
 
-      - name: Package and verify formal v1.0.8 distribution
+      - name: Package and verify formal v1.0.9 distribution
         if: github.ref == 'refs/heads/main'
         shell: pwsh
         run: |
@@ -179,20 +189,23 @@ jobs:
           New-Item -ItemType Directory -Force formal | Out-Null
           Copy-Item src/bin/Release/dotSharK.exe formal/
           Copy-Item BrowserExtension formal/BrowserExtension -Recurse
+          Copy-Item BrowserExtensionFirefox formal/BrowserExtensionFirefox -Recurse
           Copy-Item README.md,LICENSE formal/
+          if ((Get-FileHash formal/BrowserExtensionFirefox/dotSharK_Firefox_AMO-0.1.1.xpi -Algorithm SHA256).Hash -ne '19A730B85F5E643D76F13101B68A80A37AE17D4EE5DCAF993F1BAEBBF3FEB84DE') { throw 'Signed XPI differs from user-tested file' }
           $version = (Get-Item formal/dotSharK.exe).VersionInfo.FileVersion
-          if ($version -ne '1.0.8.0') { throw "Unexpected EXE version: $version" }
-          $expected = @('BrowserExtension/Install-NativeHost.ps1','BrowserExtension/README.md','BrowserExtension/background.js','BrowserExtension/manifest.json','BrowserExtension/pairing.html','BrowserExtension/pairing.js','LICENSE','README.md','dotSharK.exe') | Sort-Object
+          if ($version -ne '1.0.9.0') { throw "Unexpected EXE version: $version" }
+          $expected = @('BrowserExtension/Install-NativeHost.ps1','BrowserExtension/README.md','BrowserExtension/background.js','BrowserExtension/manifest.json','BrowserExtension/pairing.html','BrowserExtension/pairing.js','BrowserExtension/icons/icon-16.png','BrowserExtension/icons/icon-32.png','BrowserExtension/icons/icon-48.png','BrowserExtension/icons/icon-128.png','BrowserExtensionFirefox/README.md','BrowserExtensionFirefox/background.js','BrowserExtensionFirefox/manifest.json','BrowserExtensionFirefox/pairing.html','BrowserExtensionFirefox/pairing.js','BrowserExtensionFirefox/dotSharK_Firefox_AMO-0.1.1.xpi','BrowserExtensionFirefox/icons/icon-16.png','BrowserExtensionFirefox/icons/icon-32.png','BrowserExtensionFirefox/icons/icon-48.png','BrowserExtensionFirefox/icons/icon-128.png','LICENSE','README.md','dotSharK.exe') | Sort-Object
           $actual = @(Get-ChildItem formal -Recurse -File | ForEach-Object { [IO.Path]::GetRelativePath((Resolve-Path formal).Path,$_.FullName).Replace('\','/') }) | Sort-Object
           if (Compare-Object $expected $actual) { throw 'Formal package file list mismatch' }
           $actual | Set-Content Formal-File-List.txt
-          Compress-Archive -Path formal/* -DestinationPath dotSharK_v1.0.8.zip -Force
-          Expand-Archive dotSharK_v1.0.8.zip verify-formal -Force
+          Compress-Archive -Path formal/* -DestinationPath dotSharK_v1.0.9.zip -Force
+          Expand-Archive dotSharK_v1.0.9.zip verify-formal -Force
           foreach ($file in $expected) {
             if ((Get-FileHash "formal/$file").Hash -ne (Get-FileHash "verify-formal/$file").Hash) { throw "ZIP round-trip mismatch: $file" }
           }
-          $notes = (Get-Content README.md -Raw).Split('## 1.0.8 更新内容')[1].Split('## 1.0.6 更新内容')[0].Trim()
-          $notes += "`n`nWindows 10/11 · .NET Framework 4.8。解压后运行 dotSharK.exe（UI 程序集已内嵌，无需外置 DLL）。外部工具不随包提供。`n`nWindows main 构建与回归：155 项通过（48 UI + 86 集成 + 11 插件 + 10 单 EXE 独立验证）。源码提交：$env:GITHUB_SHA"
+          $notes = ([regex]::Match((Get-Content README.md -Raw), '(?s)## 1\.0\.9 更新内容\s*(.*?)\s*## 1\.0\.8 更新内容')).Groups[1].Value.Trim()
+          if (!$notes) { throw 'Release notes missing' }
+          $notes += "`n`nWindows 10/11 · .NET Framework 4.8。解压后运行 dotSharK.exe（UI 程序集已内嵌，无需外置 DLL）。外部工具不随包提供。`n`nWindows main 构建与回归通过。源码提交：$env:GITHUB_SHA"
           $notes | Set-Content Release-Notes.md -Encoding utf8
       - name: Publish verified formal release
         if: github.ref == 'refs/heads/main'
@@ -201,10 +214,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = 'Stop'
-          gh release view v1.0.8 --repo $env:GITHUB_REPOSITORY 2>$null
-          if ($LASTEXITCODE -eq 0) { throw 'v1.0.8 already exists; refusing to overwrite' }
-          gh release create v1.0.8 dotSharK_v1.0.8.zip --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'dotSharK 1.0.8' --notes-file Release-Notes.md --latest
+          gh release view v1.0.9 --repo $env:GITHUB_REPOSITORY 2>$null
+          if ($LASTEXITCODE -eq 0) { throw 'v1.0.9 already exists; refusing to overwrite' }
+          gh release create v1.0.9 dotSharK_v1.0.9.zip --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'dotSharK 1.0.9' --notes-file Release-Notes.md --latest
           if ($LASTEXITCODE -ne 0) { throw 'Release creation failed' }
-          gh release download v1.0.8 --repo $env:GITHUB_REPOSITORY --pattern dotSharK_v1.0.8.zip --dir verify-download
+          gh release download v1.0.9 --repo $env:GITHUB_REPOSITORY --pattern dotSharK_v1.0.9.zip --dir verify-download
           if ($LASTEXITCODE -ne 0) { throw 'Published asset download failed' }
-          if ((Get-FileHash dotSharK_v1.0.8.zip).Hash -ne (Get-FileHash verify-download/dotSharK_v1.0.8.zip).Hash) { throw 'Published asset hash mismatch' }
+          if ((Get-FileHash dotSharK_v1.0.9.zip).Hash -ne (Get-FileHash verify-download/dotSharK_v1.0.9.zip).Hash) { throw 'Published asset hash mismatch' }

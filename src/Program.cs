@@ -20,7 +20,7 @@ namespace dotSharK
             // Do not initialize WinForms for either fully silent entry point.
             if (SilentDownloadBridge.IsNativeHostCall(args))
             {
-                SilentDownloadBridge.RunNativeHost();
+                SilentDownloadBridge.RunNativeHost(args.Length >= 2 && args[1] == BrowserPairing.FirefoxId);
                 return;
             }
             bool fromBrowser = args != null && args.Length == 1 && args[0] == "--silent-worker";
