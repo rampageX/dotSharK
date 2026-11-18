@@ -3,8 +3,29 @@
   "name": "Send to dotSharK",
   "version": "0.1.0",
   "description": "发送视频页面或链接到 dotSharK 静默下载。",
-  "permissions": ["contextMenus", "nativeMessaging", "clipboardWrite"],
-  "browser_specific_settings": { "gecko": { "id": "dotshark@rampagex.github.io", "strict_min_version": "109.0" } },
-  "browser_action": { "default_popup": "pairing.html" },
-  "background": { "scripts": ["background.js"] }
+  "permissions": [
+    "contextMenus",
+    "nativeMessaging",
+    "clipboardWrite"
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "dotshark@rampagex.github.io",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": [
+          "browsingActivity",
+          "websiteContent"
+        ]
+      }
+    }
+  },
+  "browser_action": {
+    "default_popup": "pairing.html"
+  },
+  "background": {
+    "scripts": [
+      "background.js"
+    ]
+  }
 }
