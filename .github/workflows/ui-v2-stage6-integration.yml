@@ -191,7 +191,7 @@ jobs:
           Copy-Item BrowserExtension formal/BrowserExtension -Recurse
           Copy-Item BrowserExtensionFirefox formal/BrowserExtensionFirefox -Recurse
           Copy-Item README.md,LICENSE formal/
-          if ((Get-FileHash formal/BrowserExtensionFirefox/dotSharK_Firefox_AMO-0.1.1.xpi -Algorithm SHA256).Hash -ne '19A730B85F5E643D76F13101B68A80A37AE17D4EE5DCAF993F1BAEBBF3FEB84DE') { throw 'Signed XPI differs from user-tested file' }
+          if ((Get-FileHash formal/BrowserExtensionFirefox/dotSharK_Firefox_AMO-0.1.1.xpi -Algorithm SHA256).Hash -ne '19A730B85F5E643D76F13101B68A80A37AE17D4EE5DCAF993F1BAEBBF5EB84DE') { throw 'Signed XPI differs from user-tested file' }
           $version = (Get-Item formal/dotSharK.exe).VersionInfo.FileVersion
           if ($version -ne '1.0.9.0') { throw "Unexpected EXE version: $version" }
           $expected = @('BrowserExtension/Install-NativeHost.ps1','BrowserExtension/README.md','BrowserExtension/background.js','BrowserExtension/manifest.json','BrowserExtension/pairing.html','BrowserExtension/pairing.js','BrowserExtension/icons/icon-16.png','BrowserExtension/icons/icon-32.png','BrowserExtension/icons/icon-48.png','BrowserExtension/icons/icon-128.png','BrowserExtensionFirefox/README.md','BrowserExtensionFirefox/background.js','BrowserExtensionFirefox/manifest.json','BrowserExtensionFirefox/pairing.html','BrowserExtensionFirefox/pairing.js','BrowserExtensionFirefox/dotSharK_Firefox_AMO-0.1.1.xpi','BrowserExtensionFirefox/icons/icon-16.png','BrowserExtensionFirefox/icons/icon-32.png','BrowserExtensionFirefox/icons/icon-48.png','BrowserExtensionFirefox/icons/icon-128.png','LICENSE','README.md','dotSharK.exe') | Sort-Object
