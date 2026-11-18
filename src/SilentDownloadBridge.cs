@@ -94,7 +94,7 @@ namespace dotSharK
             if (!BitConverter.IsLittleEndian) Array.Reverse(size);
             int length = BitConverter.ToInt32(size, 0);
             if (length < 2 || length > 65536)
-                throw new InvalidDataException("浏览器消息大小无效。");
+                throw new InvalidDataException("浏览器消息大小无效：" + BitConverter.ToString(size));
             return Encoding.UTF8.GetString(ReadExactly(stream, length));
         }
 
