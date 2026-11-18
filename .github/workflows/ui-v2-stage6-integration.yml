@@ -7,6 +7,7 @@ on:
       - feature/portable-data
       - feature/embedded-ui
       - feature/plugin-pairing
+      - feature/firefox-extension
   workflow_dispatch:
 
 jobs:
@@ -41,6 +42,7 @@ jobs:
         shell: pwsh
         run: |
           node ci-tests/BrowserExtensionAcceptance.js
+          node ci-tests/FirefoxExtensionAcceptance.js
           if ($LASTEXITCODE -ne 0) { throw 'Browser extension regression failed' }
       - name: Package single EXE build with browser extension
         shell: pwsh
@@ -49,6 +51,7 @@ jobs:
           New-Item -ItemType Directory -Force package-light | Out-Null
           Copy-Item src\bin\Release\dotSharK.exe package-light\
           Copy-Item BrowserExtension package-light\BrowserExtension -Recurse
+          Copy-Item BrowserExtensionFirefox package-light\BrowserExtensionFirefox -Recurse
           Copy-Item README.md,LICENSE package-light\
           Compress-Archive -Path package-light\* -DestinationPath dotSharK_UIV2_Lightweight_Windows.zip -Force
       - uses: actions/upload-artifact@v4

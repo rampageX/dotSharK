@@ -13,6 +13,9 @@ namespace dotSharK
     internal static class BrowserPairing
     {
         internal const string Host = "com.rampagex.dotshark";
+        internal const string FirefoxId = "dotshark@rampagex.github.io";
+        private static string FirefoxManifest => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "BrowserExtension", "NativeMessaging", "firefox", Host + ".json");
+        private const string FirefoxKey = @"Software\Mozilla\NativeMessagingHosts\" + Host;
         private const string Origin = "chrome-extension://";
         private static readonly string[] Keys = { @"Software\Google\Chrome", @"Software\Chromium", @"Software\Microsoft\Edge" };
         private static string Manifest => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "BrowserExtension", "NativeMessaging", Host + ".json");
@@ -21,6 +24,14 @@ namespace dotSharK
         internal static SortedDictionary<string, string> Read()
         {
             var entries = new SortedDictionary<string, string>(StringComparer.Ordinal);
+            if (File.Exists(FirefoxManifest))
+            {
+                var f = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(File.ReadAllText(FirefoxManifest));
+                object ids;
+                if (f.TryGetValue("allowed_extensions", out ids) && ids is System.Collections.IEnumerable)
+                    foreach (var id in (System.Collections.IEnumerable)ids)
+                        if (String.Equals(id as string, FirefoxId, StringComparison.Ordinal)) entries[FirefoxId] = f.ContainsKey("dotshark_browser_label") ? Convert.ToString(f["dotshark_browser_label"]) : "Firefox / Floorp";
+            }
             if (!File.Exists(Manifest)) return entries;
             var json = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(File.ReadAllText(Manifest));
             object raw;
@@ -38,8 +49,39 @@ namespace dotSharK
             return entries;
         }
 
+        private static void SaveFirefox(SortedDictionary<string, string> entries)
+        {
+            string label;
+            if (!entries.TryGetValue(FirefoxId, out label))
+            {
+                using (var key = Registry.CurrentUser.OpenSubKey(FirefoxKey))
+                    if (key != null && String.Equals(key.GetValue("") as string, FirefoxManifest, StringComparison.OrdinalIgnoreCase))
+                        Registry.CurrentUser.DeleteSubKey(FirefoxKey, false);
+                if (File.Exists(FirefoxManifest)) File.Delete(FirefoxManifest);
+                return;
+            }
+            Directory.CreateDirectory(Path.GetDirectoryName(FirefoxManifest));
+            string json = new JavaScriptSerializer().Serialize(new {
+                name = Host, description = "dotSharK silent video download queue",
+                path = Assembly.GetExecutingAssembly().Location, type = "stdio",
+                allowed_extensions = new[] { FirefoxId }, dotshark_browser_label = label
+            });
+            string temp = FirefoxManifest + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try {
+                File.WriteAllText(temp, json, new UTF8Encoding(false));
+                if (File.Exists(FirefoxManifest)) File.Replace(temp, FirefoxManifest, null);
+                else File.Move(temp, FirefoxManifest);
+            } finally { if (File.Exists(temp)) File.Delete(temp); }
+            using (var key = Registry.CurrentUser.CreateSubKey(FirefoxKey))
+                key.SetValue("", FirefoxManifest, RegistryValueKind.String);
+        }
+
         internal static void Save(SortedDictionary<string, string> entries)
         {
+            SaveFirefox(entries);
+            var chromeEntries = new SortedDictionary<string, string>(StringComparer.Ordinal);
+            foreach (var pair in entries) if (ValidId(pair.Key)) chromeEntries.Add(pair.Key, pair.Value);
+            entries = chromeEntries;
             if (entries.Count == 0)
             {
                 foreach (string browser in Keys)

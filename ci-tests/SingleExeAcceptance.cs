@@ -84,6 +84,24 @@ internal static class SingleExeAcceptance
                 }
                 Check(process.WaitForExit(10000) && process.ExitCode == 0, "native host exits cleanly without GUI");
             }
+            var firefoxInfo = new ProcessStartInfo(exe, "\"" + Path.Combine(root, "com.rampagex.dotshark.json") + "\" dotshark@rampagex.github.io")
+            {
+                UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = root,
+                RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true
+            };
+            using (var process = Process.Start(firefoxInfo))
+            {
+                byte[] payload = Encoding.UTF8.GetBytes("{\"action\":\"ping\"}");
+                process.StandardInput.BaseStream.Write(BitConverter.GetBytes(payload.Length), 0, 4);
+                process.StandardInput.BaseStream.Write(payload, 0, payload.Length);
+                process.StandardInput.Close();
+                using (var reader = new BinaryReader(process.StandardOutput.BaseStream, Encoding.UTF8))
+                {
+                    int length = reader.ReadInt32();
+                    Check(Encoding.UTF8.GetString(reader.ReadBytes(length)).Contains("\"ok\":true"), "Firefox native messaging ping succeeds");
+                }
+                Check(process.WaitForExit(10000) && process.ExitCode == 0, "Firefox native host exits cleanly");
+            }
             Check(!Directory.GetFiles(root, "*.dll", SearchOption.AllDirectories).Any(), "no UI DLL extracted during startup or UI use");
             Console.WriteLine("PASS " + checks + " standalone EXE assertions");
             return 0;

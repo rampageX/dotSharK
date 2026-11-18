@@ -151,9 +151,9 @@ namespace dotSharK
             layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight + Theme.Space8));
             page.Controls.Add(layout);
-            layout.Controls.Add(Label("在浏览器加载 BrowserExtension 后，点击插件图标 → 复制配对码。\n选择浏览器，粘贴配对码并点击注册，再回插件点击检测连接。\n多个浏览器可依次注册。同一 ID 共用授权，删除后这些浏览器都会断开。"), 0, 0);
+            layout.Controls.Add(Label("在浏览器加载对应插件后，点击插件图标 → 复制配对码。\n选择浏览器，粘贴配对码并点击注册，再回插件点击检测连接。\n多个浏览器可依次注册。同一 ID 共用授权，删除后这些浏览器都会断开。"), 0, 0);
             var input = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = Padding.Empty };
-            var browser = StyledCombo(new object[] { "Catsxp", "Chrome", "Edge", "Chromium", "其他" });
+            var browser = StyledCombo(new object[] { "Catsxp", "Chrome", "Edge", "Chromium", "Firefox", "Floorp", "其他" });
             browser.Width = 112;
             browser.Margin = new Padding(0, 0, Theme.Space8, 0);
             var code = StyledTextBox("");
@@ -200,7 +200,11 @@ namespace dotSharK
             register.Click += (sender, args) => apply(() =>
             {
                 string id = code.Text.Trim();
-                if (!BrowserPairing.ValidId(id)) throw new ArgumentException("请粘贴插件复制的 32 位配对码。");
+                if (!BrowserPairing.ValidId(id) && id != BrowserPairing.FirefoxId) throw new ArgumentException("请粘贴 dotSharK 插件复制的配对码。");
+                bool firefox = id == BrowserPairing.FirefoxId;
+                string selected = Convert.ToString(browser.SelectedItem);
+                if (firefox != (selected == "Firefox" || selected == "Floorp"))
+                    throw new ArgumentException("请选择与插件相符的浏览器类型。");
                 var entries = BrowserPairing.Read();
                 string known;
                 string label = Convert.ToString(browser.SelectedItem);

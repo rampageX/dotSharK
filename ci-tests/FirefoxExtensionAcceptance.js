@@ -1,0 +1,22 @@
+"use strict";
+const assert = require("node:assert/strict"), fs = require("node:fs"), vm = require("node:vm"), path = require("node:path");
+const root = path.join(__dirname, "..", "BrowserExtensionFirefox");
+const manifest = JSON.parse(fs.readFileSync(path.join(root, "manifest.json"), "utf8"));
+const events = {}, menus = [], sent = [];
+const browser = { contextMenus: { async removeAll() { menus.length = 0; }, create(m) { menus.push(m); }, onClicked: { addListener(f) { events.click = f; } } }, runtime: { onInstalled: { addListener(f) { events.install = f; } }, onStartup: { addListener(f) { events.startup = f; } }, async sendNativeMessage(host, msg) { sent.push({host, msg}); return {ok:true}; } } };
+(async () => {
+  assert.equal(manifest.browser_specific_settings.gecko.id, "dotshark@rampagex.github.io");
+  assert.ok(manifest.permissions.includes("nativeMessaging"));
+  vm.runInNewContext(fs.readFileSync(path.join(root, "background.js"), "utf8"), { browser, console });
+  await events.install(); await events.startup();
+  assert.equal(menus.length, 1);
+  for (const c of ["page", "video", "link"]) assert.ok(menus[0].contexts.includes(c));
+  events.click({menuItemId:"send-to-dotshark", pageUrl:"https://example.org/list", linkUrl:"https://example.org/video"});
+  assert.equal(sent[0].msg.url, "https://example.org/video");
+  assert.equal(sent[0].host, "com.rampagex.dotshark");
+  events.click({menuItemId:"send-to-dotshark", pageUrl:"https://example.org/page", srcUrl:"blob:bad"});
+  assert.equal(sent[1].msg.url, "https://example.org/page");
+  events.click({menuItemId:"send-to-dotshark", pageUrl:"https://example.org/page", linkUrl:"javascript:bad"});
+  assert.equal(sent.length, 2);
+  console.log("PASS Firefox manifest, menu and URL routing");
+})().catch(e => { console.error(e); process.exit(1); });

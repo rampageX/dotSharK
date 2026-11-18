@@ -378,6 +378,10 @@ internal static class UiV2Stage6Acceptance
     {
         Check((bool)Static("SilentDownloadBridge", "IsNativeHostCall",
             (object)new[] { "chrome-extension://test/" }), "native messaging entry point recognized");
+        Check((bool)Static("SilentDownloadBridge", "IsNativeHostCall",
+            (object)new[] { @"C:\dotSharK\BrowserExtension\NativeMessaging\firefox\com.rampagex.dotshark.json", "dotshark@rampagex.github.io" }), "Firefox native messaging entry point recognized");
+        Check(!(bool)Static("SilentDownloadBridge", "IsNativeHostCall",
+            (object)new[] { @"C:\dotSharK\com.rampagex.dotshark.json", "unrelated@example.org" }), "unrelated add-on ID rejected");
         Check((string)Static("SilentDownloadBridge", "ValidatePageUrl",
             "https://example.com/watch?v=1") != null, "native messaging HTTP URL accepted");
         Check(Static("SilentDownloadBridge", "ValidatePageUrl",
