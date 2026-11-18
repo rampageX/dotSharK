@@ -153,10 +153,10 @@ namespace dotSharK
             page.Controls.Add(layout);
             layout.Controls.Add(Label("在浏览器加载 BrowserExtension 后，点击插件图标 → 复制配对码。\n选择浏览器，粘贴配对码并点击注册，再回插件点击检测连接。\n多个浏览器可依次注册。同一 ID 共用授权，删除后这些浏览器都会断开。"), 0, 0);
             var input = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
-            var browser = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 112, BackColor = field, ForeColor = fg };
-            browser.Items.AddRange(new object[] { "Catsxp", "Chrome", "Edge", "Chromium", "其他" });
-            browser.SelectedIndex = 0;
-            var code = new TextBox { Width = 290, MaxLength = 64, BackColor = field, ForeColor = fg };
+            var browser = StyledCombo(new object[] { "Catsxp", "Chrome", "Edge", "Chromium", "其他" });
+            browser.Width = 112;
+            var code = StyledTextBox("");
+            code.Width = 290;
             var register = new Button { Text = "注册", AutoSize = true, BackColor = panel, ForeColor = fg, FlatStyle = FlatStyle.Flat };
             input.Controls.AddRange(new Control[] { browser, code, register });
             layout.Controls.Add(input, 0, 1);
@@ -189,7 +189,7 @@ namespace dotSharK
                 if (!BrowserPairing.ValidId(id)) throw new ArgumentException("请粘贴插件复制的 32 位配对码。");
                 var entries = BrowserPairing.Read();
                 string known;
-                string label = browser.Text;
+                string label = Convert.ToString(browser.SelectedItem);
                 if (entries.TryGetValue(id, out known) && known != "旧注册（未标注）")
                     label = String.Join(" / ", known.Split(new[] { " / " }, StringSplitOptions.None).Concat(new[] { label }).Distinct());
                 entries[id] = label;
