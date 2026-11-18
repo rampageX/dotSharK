@@ -41,6 +41,7 @@ internal static class UiV2Stage6Acceptance
             var playlist = Playlist();
             using (var main = NewForm("MainFormV2"))
             {
+                Check(main.Text.Contains("v" + main.GetType().Assembly.GetName().Version.ToString(3)), "main title displays application assembly version");
                 Show(main);
                 Check(Find<DataGridView>(main, "gridQueue") is DarkDataGridView, "production queue uses V2 dark grid");
                 Check(Find<FlatTextArea>(main, "txtLog") != null, "production log uses V2 dark editor");
