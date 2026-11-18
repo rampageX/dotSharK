@@ -98,6 +98,9 @@ namespace dotSharK
                 tabs.AddPage("YT-DLP", pageYt);
                 tabs.AddPage("高级下载", pageAdvanced);
                 tabs.AddPage("静默下载", pageSilent);
+                var pagePlugins = NewPage();
+                tabs.AddPage("插件注册", pagePlugins);
+                BuildPluginsPage(pagePlugins);
                 root.Controls.Add(tabs, 0, 0);
                 BuildToolsPage(pageTools, new[] { ytDlp, ffmpeg, ffprobe, deno, aria2c });
                 BuildYtPage(pageYt);
@@ -138,6 +141,73 @@ namespace dotSharK
                 ActiveControl = tabs;
             }
             finally { ResumeLayout(true); }
+        }
+
+        private void BuildPluginsPage(Panel page)
+        {
+            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4 };
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+            page.Controls.Add(layout);
+            layout.Controls.Add(Label("在浏览器加载 BrowserExtension 后，点击插件图标 → 复制配对码。\n选择浏览器，粘贴配对码并点击注册，再回插件点击检测连接。\n多个浏览器可依次注册。同一 ID 共用授权，删除后这些浏览器都会断开。"), 0, 0);
+            var input = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
+            var browser = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 112, BackColor = field, ForeColor = fg };
+            browser.Items.AddRange(new object[] { "Catsxp", "Chrome", "Edge", "Chromium", "其他" });
+            browser.SelectedIndex = 0;
+            var code = new TextBox { Width = 290, MaxLength = 64, BackColor = field, ForeColor = fg };
+            var register = new Button { Text = "注册", AutoSize = true, BackColor = panel, ForeColor = fg, FlatStyle = FlatStyle.Flat };
+            input.Controls.AddRange(new Control[] { browser, code, register });
+            layout.Controls.Add(input, 0, 1);
+            var list = new ListView { Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, MultiSelect = false, BackColor = field, ForeColor = fg };
+            list.Columns.Add("已注册的扩展 ID", 330);
+            list.Columns.Add("浏览器", 250);
+            layout.Controls.Add(list, 0, 2);
+            var actions = new FlowLayoutPanel { Dock = DockStyle.Fill };
+            var remove = new Button { Text = "删除选中", AutoSize = true, BackColor = panel, ForeColor = fg, FlatStyle = FlatStyle.Flat };
+            var clear = new Button { Text = "清除全部注册", AutoSize = true, BackColor = panel, ForeColor = fg, FlatStyle = FlatStyle.Flat };
+            actions.Controls.AddRange(new Control[] { remove, clear });
+            layout.Controls.Add(actions, 0, 3);
+            Action refresh = () =>
+            {
+                list.Items.Clear();
+                foreach (var entry in BrowserPairing.Read())
+                    list.Items.Add(new ListViewItem(new[] { entry.Key, entry.Value }));
+                clear.Enabled = list.Items.Count > 0;
+                remove.Enabled = false;
+            };
+            Action<Action> apply = operation =>
+            {
+                try { operation(); refresh(); }
+                catch (Exception ex) { MessageBox.Show(this, ex.Message, "插件注册", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+            };
+            list.SelectedIndexChanged += (sender, args) => remove.Enabled = list.SelectedItems.Count == 1;
+            register.Click += (sender, args) => apply(() =>
+            {
+                string id = code.Text.Trim();
+                if (!BrowserPairing.ValidId(id)) throw new ArgumentException("请粘贴插件复制的 32 位配对码。");
+                var entries = BrowserPairing.Read();
+                string known;
+                string label = browser.Text;
+                if (entries.TryGetValue(id, out known) && known != "旧注册（未标注）")
+                    label = String.Join(" / ", known.Split(new[] { " / " }, StringSplitOptions.None).Concat(new[] { label }).Distinct());
+                entries[id] = label;
+                BrowserPairing.Save(entries);
+                code.Clear();
+            });
+            remove.Click += (sender, args) =>
+            {
+                if (list.SelectedItems.Count != 1) return;
+                string id = list.SelectedItems[0].Text;
+                apply(() => { var entries = BrowserPairing.Read(); entries.Remove(id); BrowserPairing.Save(entries); });
+            };
+            clear.Click += (sender, args) =>
+            {
+                if (MessageBox.Show(this, "清除全部 dotSharK 插件注册？", "插件注册", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                    apply(() => BrowserPairing.Save(new SortedDictionary<string, string>()));
+            };
+            page.VisibleChanged += (sender, args) => { if (page.Visible) apply(() => { }); };
         }
 
         private static Panel NewPage()

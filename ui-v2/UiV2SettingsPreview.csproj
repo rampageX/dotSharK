@@ -33,6 +33,7 @@
          No modification or reference changes to src/dotSharK.csproj. -->
     <Compile Include="..\src\*.cs" />
     <Compile Include="ConfigurationDialogV2.cs" />
+    <Compile Include="..\src\BrowserPairing.cs" />
     <Compile Include="SettingsPreviewLauncher.cs" />
   </ItemGroup>
   <ItemGroup>

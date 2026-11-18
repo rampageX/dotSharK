@@ -1,9 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Send to dotSharK",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Send a video page or clicked video link to dotSharK for silent download.",
   "permissions": ["contextMenus", "nativeMessaging"],
+  "action": { "default_popup": "pairing.html" },
   "background": {
     "service_worker": "background.js"
   }

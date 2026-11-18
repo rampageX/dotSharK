@@ -91,7 +91,7 @@ internal static class UiV2Stage6Acceptance
             {
                 Show(settings);
                 var tabs = Find<DarkTabStrip>(settings, "tabSettings");
-                Check(tabs.Pages.Count == 4, "four integrated settings pages");
+                Check(tabs.Pages.Count == 5, "five integrated settings pages");
                 for (int i = 0; i < 4; ++i)
                 {
                     tabs.SelectedIndex = i;
