@@ -38,6 +38,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Single EXE harness compile failed' }
           & ./standalone/SingleExeAcceptance.exe
           if ($LASTEXITCODE -ne 0) { throw 'Single EXE isolation test failed' }
+          python ci-tests/FirefoxNativeProtocol.py
+          if ($LASTEXITCODE -ne 0) { throw 'Firefox native protocol test failed' }
       - name: Verify browser link context and Native Host URL routing
         shell: pwsh
         run: |
