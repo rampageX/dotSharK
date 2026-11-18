@@ -15,6 +15,7 @@ namespace dotSharK
         internal const string Host = "com.rampagex.dotshark";
         internal const string FirefoxId = "dotshark@rampagex.github.io";
         private static string FirefoxManifest => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "BrowserExtension", "NativeMessaging", "firefox", Host + ".json");
+        private static string FirefoxLabel => Path.Combine(Path.GetDirectoryName(FirefoxManifest), "browser-label.txt");
         private const string FirefoxKey = @"Software\Mozilla\NativeMessagingHosts\" + Host;
         private const string Origin = "chrome-extension://";
         private static readonly string[] Keys = { @"Software\Google\Chrome", @"Software\Chromium", @"Software\Microsoft\Edge" };
@@ -30,7 +31,7 @@ namespace dotSharK
                 object ids;
                 if (f.TryGetValue("allowed_extensions", out ids) && ids is System.Collections.IEnumerable)
                     foreach (var id in (System.Collections.IEnumerable)ids)
-                        if (String.Equals(id as string, FirefoxId, StringComparison.Ordinal)) entries[FirefoxId] = f.ContainsKey("dotshark_browser_label") ? Convert.ToString(f["dotshark_browser_label"]) : "Firefox / Floorp";
+                        if (String.Equals(id as string, FirefoxId, StringComparison.Ordinal)) entries[FirefoxId] = File.Exists(FirefoxLabel) ? File.ReadAllText(FirefoxLabel, Encoding.UTF8) : (f.ContainsKey("dotshark_browser_label") ? Convert.ToString(f["dotshark_browser_label"]) : "Firefox / Floorp");
             }
             if (!File.Exists(Manifest)) return entries;
             var json = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(File.ReadAllText(Manifest));
@@ -58,13 +59,14 @@ namespace dotSharK
                     if (key != null && String.Equals(key.GetValue("") as string, FirefoxManifest, StringComparison.OrdinalIgnoreCase))
                         Registry.CurrentUser.DeleteSubKey(FirefoxKey, false);
                 if (File.Exists(FirefoxManifest)) File.Delete(FirefoxManifest);
+                if (File.Exists(FirefoxLabel)) File.Delete(FirefoxLabel);
                 return;
             }
             Directory.CreateDirectory(Path.GetDirectoryName(FirefoxManifest));
             string json = new JavaScriptSerializer().Serialize(new {
                 name = Host, description = "dotSharK silent video download queue",
                 path = Assembly.GetExecutingAssembly().Location, type = "stdio",
-                allowed_extensions = new[] { FirefoxId }, dotshark_browser_label = label
+                allowed_extensions = new[] { FirefoxId }
             });
             string temp = FirefoxManifest + "." + Guid.NewGuid().ToString("N") + ".tmp";
             try {
@@ -72,6 +74,7 @@ namespace dotSharK
                 if (File.Exists(FirefoxManifest)) File.Replace(temp, FirefoxManifest, null);
                 else File.Move(temp, FirefoxManifest);
             } finally { if (File.Exists(temp)) File.Delete(temp); }
+            File.WriteAllText(FirefoxLabel, label, new UTF8Encoding(false));
             using (var key = Registry.CurrentUser.CreateSubKey(FirefoxKey))
                 key.SetValue("", FirefoxManifest, RegistryValueKind.String);
         }
