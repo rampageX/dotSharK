@@ -409,12 +409,16 @@ internal static class UiV2Stage6Acceptance
                 new object[] { ytDlp, ffmpeg, "", "", "" }, null);
             var silent = Path.Combine(folder, "Silent");
             Directory.CreateDirectory(silent);
+            string global = Path.Combine(folder, "GlobalOverride");
+            Field(opt, "CustomArguments", "--paths \"" + global + "\" --output \"" + Path.Combine(global, "wrong.%(ext)s") + "\"");
             var download = (Task)Invoke(client, "DownloadSilentAsync", server.Url, silent,
                 opt,
                 (Action<string>)(line => Console.WriteLine("yt-dlp: " + line)),
                 CancellationToken.None);
             Pump(download, "silent yt-dlp local HTTP transfer");
             Check(Directory.GetFiles(silent, "*.mp4").Length == 1, "real silent download wrote MP4");
+            Check(!Directory.Exists(global), "silent folder wins over global path and output template");
+            Field(opt, "CustomArguments", "");
             string firstFile = Directory.GetFiles(silent, "*.mp4")[0];
             File.Delete(firstFile);
             var repeatLog = new List<string>();

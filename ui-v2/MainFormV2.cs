@@ -84,7 +84,8 @@ namespace dotSharK
             {
                 Title = url, Url = url, BrowserSilent = true,
                 BrowserJobPath = jobPath,
-                OutputFolder = SilentDownloadBridge.SilentFolder,
+                OutputFolder = String.IsNullOrWhiteSpace(ytdlpOptions.SilentDownloadFolder)
+                    ? SilentDownloadBridge.SilentFolder : ytdlpOptions.SilentDownloadFolder,
                 Status = "等待中",
                 ProgressWeight = 1
             });

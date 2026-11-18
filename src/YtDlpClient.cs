@@ -232,7 +232,7 @@ namespace dotSharK
                 args.Add(FfmpegPath);
             }
             args.Add(url);
-            AddAria2cAndOverrides(args, options, url);
+            AddAria2cAndOverrides(args, options, url, preserveDestination: true);
             // --print implies quiet; keep archive skips and extractor diagnostics visible.
             args.Insert(args.Count - 1, "--no-quiet");
             string finalPath = null;
@@ -469,7 +469,7 @@ namespace dotSharK
                 key == "--js-runtimes" || key == "--retries" || key == "--limit-rate";
         }
 
-        private void AddAria2cAndOverrides(List<string> args, YtDlpOptions options, string originPageUrl)
+        private void AddAria2cAndOverrides(List<string> args, YtDlpOptions options, string originPageUrl, bool preserveDestination = false)
         {
             if (options != null && MatchesAriaSite(originPageUrl, options.Aria2cSites))
             {
@@ -479,7 +479,7 @@ namespace dotSharK
                 args.Insert(args.Count - 1, path);
                 args.Insert(args.Count - 2, "--downloader");
             }
-            ApplyCustomOverrides(args, options);
+            ApplyCustomOverrides(args, options, preserveDestination);
             // Domain-specific bypass takes precedence over even custom --proxy.
             ApplyNoProxySite(args, options, originPageUrl, SelectsAria2c(args));
         }
@@ -548,9 +548,20 @@ namespace dotSharK
             return true;
         }
 
-        private static void ApplyCustomOverrides(List<string> args, YtDlpOptions options)
+        private static void ApplyCustomOverrides(List<string> args, YtDlpOptions options, bool preserveDestination = false)
         {
             var user = ParseCustomArguments(options == null ? "" : options.CustomArguments);
+            if (preserveDestination)
+            {
+                for (int i = 0; i < user.Count; i++)
+                {
+                    string key = CanonicalSwitch(user[i]);
+                    if (key != "--paths" && key != "--output") continue;
+                    bool separateValue = user[i] == key || user[i] == "-P" || user[i] == "-o";
+                    user.RemoveRange(i, separateValue && i + 1 < user.Count ? 2 : 1);
+                    i--;
+                }
+            }
             if (user.Count == 0) return;
             if (args.Count == 0) return;
             string url = args[args.Count - 1];
