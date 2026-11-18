@@ -1,4 +1,4 @@
-# dotSharK 1.0.7
+# dotSharK 1.0.8
 
 dotSharK 是一个轻量的 Windows yt-dlp 图形外壳，使用 **C#、WinForms 和 .NET Framework 4.8** 编写。程序使用暗色界面和绿色强调色，实际解析与下载由用户选择的 yt-dlp 完成。
 
@@ -47,6 +47,13 @@ dotnet build src\dotSharK.csproj -c Release
 ```
 
 构建输出位于 `src\bin\Release\dotSharK.exe`。项目不依赖 Visual Studio IDE。
+
+## 1.0.8 更新内容
+
+- 新增浏览器插件配对页面，复制扩展 ID 并检测 Native Messaging；配置中增加“插件注册”，可按浏览器注册、单项删除或清空授权。
+- 哔哩哔哩分 P 列表解析和下载时更新视频标题，队列显示实际名称。
+- 静默下载遵循自身保存目录，并阻止自定义路径参数覆盖该目录。
+- “选择视频质量”的估算大小列按内容预留宽度，完整显示数值。
 
 ## 1.0.7 更新内容
 
