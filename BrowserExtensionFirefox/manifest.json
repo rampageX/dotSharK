@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Send to dotSharK",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "发送视频页面或链接到 dotSharK 静默下载。",
   "permissions": [
     "contextMenus",
