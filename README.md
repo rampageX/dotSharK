@@ -53,6 +53,7 @@ dotnet build src\dotSharK.csproj -c Release
 - 新增 Firefox 系插件与插件注册，提供 Mozilla 签名的 Firefox 0.1.1 XPI，支持 Firefox 140 及以上版本。
 - 修复 Firefox Native Messaging 清单兼容问题，支持与 Chromium 系插件并存。
 - Firefox 和 Chromium 插件新增小鲨鱼图标。
+- 主窗口标题栏显示当前程序版本。
 
 ## 1.0.8 更新内容
 
