@@ -62,24 +62,58 @@ namespace dotSharK
             if (!isPlaylist) return new LinkInspection { Media = ParseMediaInfo(root, options == null ? 3 : options.VideoQualityLimit) };
 
             var playlist = new PlaylistInfo { Title = Str(root, "title") };
+            Uri playlistUri;
+            bool bilibili = Uri.TryCreate(url, UriKind.Absolute, out playlistUri) &&
+                (playlistUri.Host.Equals("bilibili.com", StringComparison.OrdinalIgnoreCase) ||
+                 playlistUri.Host.EndsWith(".bilibili.com", StringComparison.OrdinalIgnoreCase) ||
+                 playlistUri.Host.Equals("b23.tv", StringComparison.OrdinalIgnoreCase));
+            var missingTitles = new List<PlaylistEntry>();
             int fallbackIndex = 0;
             foreach (var entry in rawEntries)
             {
                 if (entry == null) continue;
                 fallbackIndex++;
                 string id = Str(entry, "id");
-                string entryUrl = Str(entry, "webpage_url");
+                // Flat Bilibili entries carry the individual part URL (including ?p=)
+                // in url. Prefer it over a generic webpage URL when available.
+                string flatUrl = Str(entry, "url");
+                Uri partUri;
+                string entryUrl = bilibili && Uri.TryCreate(flatUrl, UriKind.Absolute, out partUri) &&
+                    (partUri.Scheme == Uri.UriSchemeHttp || partUri.Scheme == Uri.UriSchemeHttps)
+                    ? flatUrl : Str(entry, "webpage_url");
                 if (String.IsNullOrWhiteSpace(entryUrl)) entryUrl = Str(entry, "original_url");
                 if (String.IsNullOrWhiteSpace(entryUrl)) entryUrl = Str(entry, "url");
-                if (!String.IsNullOrWhiteSpace(id) && (String.IsNullOrWhiteSpace(entryUrl) || !entryUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase)))
+                if (!bilibili && !String.IsNullOrWhiteSpace(id) && (String.IsNullOrWhiteSpace(entryUrl) || !entryUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase)))
                     entryUrl = "https://www.youtube.com/watch?v=" + Uri.EscapeDataString(id);
                 if (String.IsNullOrWhiteSpace(entryUrl)) continue;
-                playlist.Entries.Add(new PlaylistEntry
+                string title = Str(entry, "title");
+                if (bilibili && String.IsNullOrWhiteSpace(title)) title = Str(entry, "part");
+                var item = new PlaylistEntry
                 {
                     Index = Int(entry, "playlist_index") > 0 ? Int(entry, "playlist_index") : fallbackIndex,
-                    Id = id, Title = String.IsNullOrWhiteSpace(Str(entry, "title")) ? (id.Length == 0 ? "未命名视频" : id) : Str(entry, "title"),
+                    Id = id, Title = String.IsNullOrWhiteSpace(title) ? (bilibili ? "第 " + fallbackIndex + " 集（未取得标题）" : id.Length == 0 ? "未命名视频" : id) : title,
                     Url = entryUrl, Duration = Num(entry, "duration")
-                });
+                };
+                playlist.Entries.Add(item);
+                if (bilibili && String.IsNullOrWhiteSpace(title)) missingTitles.Add(item);
+            }
+            if (missingTitles.Count > 0)
+            {
+                using (var slots = new SemaphoreSlim(3))
+                {
+                    await Task.WhenAll(missingTitles.Select(async item =>
+                    {
+                        await slots.WaitAsync();
+                        try
+                        {
+                            var media = await AnalyzeAsync(item.Url, options);
+                            if (!String.IsNullOrWhiteSpace(media.Title)) item.Title = media.Title;
+                            if (media.Duration > 0) item.Duration = media.Duration;
+                        }
+                        catch (InvalidOperationException) { /* Leave the selectable entry in the list. */ }
+                        finally { slots.Release(); }
+                    }));
+                }
             }
             if (playlist.Entries.Count == 0) throw new InvalidOperationException("检测到播放列表，但没有取得可下载的视频项目。");
             return new LinkInspection { Playlist = playlist };
@@ -226,6 +260,7 @@ namespace dotSharK
             if (item == null || String.IsNullOrWhiteSpace(item.Url)) throw new InvalidOperationException("播放列表项目网址为空。");
             var args = CommonArguments(options, true);
             args.AddRange(new[] { "--no-playlist", "--newline", "--progress", "-P", item.OutputFolder, "-o", "%(title)s [%(id)s].%(ext)s",
+                "--print", "before_dl:dotSharKTitleJson=%(title)j",
                 "--print", "after_move:dotSharKFileJson=%(filepath)j" });
             if (!String.IsNullOrWhiteSpace(FfmpegPath) && String.IsNullOrWhiteSpace(FfprobePath)) { args.Add("--ffmpeg-location"); args.Add(FfmpegPath); }
             args.Add("-f"); args.Add(PlaylistFormatSelector(item));

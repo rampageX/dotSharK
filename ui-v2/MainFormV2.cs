@@ -930,13 +930,18 @@ namespace dotSharK
                     try
                     {
                         if (Path.IsPathRooted(filename) && filename.IndexOfAny(Path.GetInvalidPathChars()) < 0)
+                        {
                             item.FilePath = filename;
+                            if (item.PlaylistItem && (String.IsNullOrWhiteSpace(item.Title) ||
+                                item.Title == "未命名视频" || item.Title.EndsWith("（未取得标题）", StringComparison.Ordinal)))
+                                item.Title = Path.GetFileNameWithoutExtension(filename);
+                        }
                     }
                     catch (ArgumentException) { }
                 }
                 return;
             }
-            if (item.BrowserSilent && lineText.StartsWith("dotSharKTitleJson=", StringComparison.Ordinal))
+            if ((item.BrowserSilent || item.PlaylistItem) && lineText.StartsWith("dotSharKTitleJson=", StringComparison.Ordinal))
             {
                 string title = ParsePrintedMetadata(lineText, "dotSharKTitleJson=");
                 if (!String.IsNullOrWhiteSpace(title) && IsHandleCreated && !IsDisposed)
