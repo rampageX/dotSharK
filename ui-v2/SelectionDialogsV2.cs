@@ -108,18 +108,20 @@ namespace dotSharK
                 });
                 videoGrid.Columns.Add(new DataGridViewTextBoxColumn
                 {
-                    Name = "fps", HeaderText = "帧率", Width = Theme.StatusColumnWidth,
+                    Name = "fps", HeaderText = "帧率", Width = 92,
                     AutoSizeMode = DataGridViewAutoSizeColumnMode.None
                 });
                 videoGrid.Columns.Add(new DataGridViewTextBoxColumn
                 {
-                    Name = "source", HeaderText = "源格式", Width = Theme.StatusColumnWidth,
+                    Name = "source", HeaderText = "源格式", Width = 84,
                     AutoSizeMode = DataGridViewAutoSizeColumnMode.None
                 });
                 var sizeCol = new DataGridViewTextBoxColumn
                 {
                     Name = "estimate", HeaderText = "估算大小",
-                    Width = Theme.SourceColumnWidth,
+                    Width = Theme.QualityColumnWidth,
+                    MinimumWidth = Theme.QualityColumnWidth,
+                    Resizable = DataGridViewTriState.False,
                     AutoSizeMode = DataGridViewAutoSizeColumnMode.None
                 };
                 sizeCol.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleRight;
@@ -133,6 +135,27 @@ namespace dotSharK
                         (v.Container ?? "").ToUpperInvariant(), YtDlpClient.FormatBytes(v.ApproxBytes));
                     videoGrid.Rows[row].Tag = v;
                 }
+                // The custom scrollbar overlays the right edge of the grid.
+                videoGrid.Columns.Add(new DataGridViewTextBoxColumn
+                {
+                    Name = "scrollbarGutter", Width = Theme.ScrollbarWidth,
+                    AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
+                    Resizable = DataGridViewTriState.False,
+                    SortMode = DataGridViewColumnSortMode.NotSortable
+                });
+                Action fitEstimate = () =>
+                {
+                    var flags = TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix;
+                    int textWidth = TextRenderer.MeasureText(sizeCol.HeaderText, videoGrid.Font, Size.Empty, flags).Width;
+                    foreach (DataGridViewRow row in videoGrid.Rows)
+                        textWidth = Math.Max(textWidth, TextRenderer.MeasureText(
+                            Convert.ToString(row.Cells[sizeCol.Index].Value), videoGrid.Font, Size.Empty, flags).Width);
+                    int width = Math.Max(Theme.QualityColumnWidth, textWidth + Theme.Space24 + Theme.Space8);
+                    sizeCol.MinimumWidth = width;
+                    sizeCol.Width = width;
+                };
+                fitEstimate();
+                videoGrid.FontChanged += (s, e) => fitEstimate();
                 if (videoGrid.Rows.Count > 0)
                 {
                     videoGrid.Rows[0].Selected = true;

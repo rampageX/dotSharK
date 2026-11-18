@@ -27,7 +27,7 @@
     <Reference Include="System.Windows.Forms"/><Reference Include="System.Web.Extensions"/><Reference Include="System.Security"/><Reference Include="System.IO.Compression"/><Reference Include="System.IO.Compression.FileSystem"/>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Program.cs"/><Compile Include="EmbeddedUiAssembly.cs"/><Compile Include="AppBranding.cs"/><Compile Include="..\ui-v2\MainFormV2.cs"/><Compile Include="..\ui-v2\ConfigurationDialogV2.cs"/><Compile Include="..\ui-v2\SelectionDialogsV2.cs"/><Compile Include="DarkControls.cs"/><Compile Include="YtDlpClient.cs"/>
+    <Compile Include="Program.cs"/><Compile Include="BrowserPairing.cs"/><Compile Include="EmbeddedUiAssembly.cs"/><Compile Include="AppBranding.cs"/><Compile Include="..\ui-v2\MainFormV2.cs"/><Compile Include="..\ui-v2\ConfigurationDialogV2.cs"/><Compile Include="..\ui-v2\SelectionDialogsV2.cs"/><Compile Include="DarkControls.cs"/><Compile Include="YtDlpClient.cs"/>
     <Compile Include="Models.cs"/><Compile Include="CompletedQueueStore.cs"/><Compile Include="CompletedFileResolver.cs"/><Compile Include="WindowPlacement.cs"/><Compile Include="SelectionDialogs.cs"/><Compile Include="ExternalToolUpdater.cs"/><Compile Include="SilentDownloadBridge.cs"/><Compile Include="SilentTrayContext.cs"/><Compile Include="Properties\AssemblyInfo.cs"/>
   </ItemGroup>
   <ItemGroup>

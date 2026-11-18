@@ -51,6 +51,11 @@ namespace dotSharK
                 string json = ReadNativeMessage(Console.OpenStandardInput());
                 var request = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(json);
                 object value;
+                if (request != null && request.TryGetValue("action", out value) && (value as string) == "ping")
+                {
+                    WriteNativeMessage(Console.OpenStandardOutput(), "{\"ok\":true}");
+                    return;
+                }
                 string url = request != null && request.TryGetValue("url", out value) ? value as string : null;
                 url = ValidatePageUrl(url);
                 if (url == null) throw new InvalidDataException("必须发送单个 HTTP/HTTPS 网页链接。");

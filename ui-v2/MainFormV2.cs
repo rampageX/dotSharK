@@ -84,7 +84,8 @@ namespace dotSharK
             {
                 Title = url, Url = url, BrowserSilent = true,
                 BrowserJobPath = jobPath,
-                OutputFolder = SilentDownloadBridge.SilentFolder,
+                OutputFolder = String.IsNullOrWhiteSpace(ytdlpOptions.SilentDownloadFolder)
+                    ? SilentDownloadBridge.SilentFolder : ytdlpOptions.SilentDownloadFolder,
                 Status = "等待中",
                 ProgressWeight = 1
             });
@@ -930,13 +931,18 @@ namespace dotSharK
                     try
                     {
                         if (Path.IsPathRooted(filename) && filename.IndexOfAny(Path.GetInvalidPathChars()) < 0)
+                        {
                             item.FilePath = filename;
+                            if (item.PlaylistItem && (String.IsNullOrWhiteSpace(item.Title) ||
+                                item.Title == "未命名视频" || item.Title.EndsWith("（未取得标题）", StringComparison.Ordinal)))
+                                item.Title = Path.GetFileNameWithoutExtension(filename);
+                        }
                     }
                     catch (ArgumentException) { }
                 }
                 return;
             }
-            if (item.BrowserSilent && lineText.StartsWith("dotSharKTitleJson=", StringComparison.Ordinal))
+            if ((item.BrowserSilent || item.PlaylistItem) && lineText.StartsWith("dotSharKTitleJson=", StringComparison.Ordinal))
             {
                 string title = ParsePrintedMetadata(lineText, "dotSharKTitleJson=");
                 if (!String.IsNullOrWhiteSpace(title) && IsHandleCreated && !IsDisposed)

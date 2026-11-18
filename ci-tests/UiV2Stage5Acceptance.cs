@@ -31,7 +31,7 @@ internal static class UiV2Stage5Acceptance
             {
                 Show(settings);
                 var tabs = Find<DarkTabStrip>(settings, "tabSettings");
-                Check(tabs.Pages.Count == 4, "settings has four pages");
+                Check(tabs.Pages.Count == 5, "settings has five pages");
                 Check(settings.FormBorderStyle == FormBorderStyle.Sizable, "settings is resizable");
                 Check(settings.AutoScaleMode == AutoScaleMode.Dpi, "settings uses DPI autoscaling");
                 var save = Find<Button>(settings, "btnSave");

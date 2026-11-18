@@ -30,6 +30,7 @@
     <!-- Original source retained unmodified in separate preview EXE. -->
     <Compile Include="..\src\*.cs" />
     <Compile Include="ConfigurationDialogV2.cs" />
+    <Compile Include="..\src\BrowserPairing.cs" />
     <Compile Include="MainFormV2.cs" />
     <Compile Include="SelectionDialogsV2.cs" />
     <Compile Include="Stage4PreviewLauncher.cs" />
