@@ -106,7 +106,7 @@ namespace dotSharK
 
         public MainFormV2()
         {
-            Text = "dotSharK  ·  YouTube Downloader"; StartPosition = FormStartPosition.CenterScreen; MinimumSize = Theme.MainMinimumSize; Size = new Size(1120, 820);
+            Text = "dotSharK v" + System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString(3) + "  ·  YouTube Downloader"; StartPosition = FormStartPosition.CenterScreen; MinimumSize = Theme.MainMinimumSize; Size = new Size(1120, 820);
             BackColor = bg; ForeColor = fg; Font = Theme.BodyFont; FormBorderStyle = FormBorderStyle.Sizable; KeyPreview = true; Icon = AppBranding.CreateIcon();
             BuildUi(); LoadSettings(); LoadCompletedQueue();
             if (savedMainWindow != null)
