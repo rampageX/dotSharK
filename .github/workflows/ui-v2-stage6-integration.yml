@@ -38,6 +38,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Single EXE harness compile failed' }
           & ./standalone/SingleExeAcceptance.exe
           if ($LASTEXITCODE -ne 0) { throw 'Single EXE isolation test failed' }
+          & $compiler /nologo /codepage:65001 /r:System.Web.Extensions.dll /out:standalone\\FirefoxPairingAcceptance.exe ci-tests\\FirefoxPairingAcceptance.cs
+          if ($LASTEXITCODE -ne 0) { throw 'Firefox registration harness compile failed' }
+          & ./standalone/FirefoxPairingAcceptance.exe (Resolve-Path standalone/dotSharK.exe).Path
+          if ($LASTEXITCODE -ne 0) { throw 'Firefox registration validation failed' }
           python ci-tests/FirefoxNativeProtocol.py
           if ($LASTEXITCODE -ne 0) { throw 'Firefox native protocol test failed' }
       - name: Verify browser link context and Native Host URL routing
