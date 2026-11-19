@@ -19,12 +19,14 @@ namespace dotSharK
         // Handle the native minimize command before WinForms moves the window
         // off-screen. The tray owner performs one smooth hide operation.
         internal event EventHandler TrayMinimizeRequested;
+        internal bool MinimizeToTray { get { return ytdlpOptions.MinimizeToTray; } }
+        internal bool CloseToTray { get { return ytdlpOptions.CloseToTray; } }
         protected override void WndProc(ref Message m)
         {
             const int WmSysCommand = 0x0112;
             const long ScMinimize = 0xF020;
             if (m.Msg == WmSysCommand && (m.WParam.ToInt64() & 0xFFF0L) == ScMinimize &&
-                TrayMinimizeRequested != null && Visible && !IsDisposed)
+                TrayMinimizeRequested != null && ytdlpOptions.MinimizeToTray && Visible && !IsDisposed)
             {
                 TrayMinimizeRequested(this, EventArgs.Empty);
                 m.Result = IntPtr.Zero;
@@ -1267,6 +1269,8 @@ namespace dotSharK
                         else if (key == "no-proxy-sites") ytdlpOptions.NoProxySites = value;
                         else if (key == "custom-args") ytdlpOptions.CustomArguments = value;
                         else if (key == "keep-completed") ytdlpOptions.KeepCompletedTasks = value == "1";
+                        else if (key == "minimize-to-tray") ytdlpOptions.MinimizeToTray = value == "1";
+                        else if (key == "close-to-tray") ytdlpOptions.CloseToTray = value != "0";
                         else if (key == "silent-max-height") { int h; if (Int32.TryParse(value, out h) && (h == 0 || h == 4320 || h == 2160 || h == 1080 || h == 720)) ytdlpOptions.SilentMaxHeight = h; }
                         else if (key == "proxy-enabled") ytdlpOptions.ProxyEnabled = value != "0";
                         else if (key == "geo-proxy-enabled") ytdlpOptions.GeoProxyEnabled = value != "0";
@@ -1305,6 +1309,8 @@ namespace dotSharK
                     "no-proxy-sites=" + Uri.EscapeDataString(ytdlpOptions.NoProxySites ?? ""),
                     "custom-args=" + Uri.EscapeDataString(ytdlpOptions.CustomArguments ?? ""),
                     "keep-completed=" + (ytdlpOptions.KeepCompletedTasks ? "1" : "0"),
+                    "minimize-to-tray=" + (ytdlpOptions.MinimizeToTray ? "1" : "0"),
+                    "close-to-tray=" + (ytdlpOptions.CloseToTray ? "1" : "0"),
                     "silent-max-height=" + ytdlpOptions.SilentMaxHeight,
                     "fragments=" + ytdlpOptions.ConcurrentFragments, "downloads=" + Math.Max(1, Math.Min(6, ytdlpOptions.ConcurrentDownloads)),
                     "video-quality-limit=" + ytdlpOptions.VideoQualityLimit,

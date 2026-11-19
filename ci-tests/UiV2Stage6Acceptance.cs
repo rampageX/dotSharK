@@ -80,11 +80,16 @@ internal static class UiV2Stage6Acceptance
                 var portableOptions = Field(main, "ytdlpOptions");
                 string proxy = "socks5://user:p@ss@127.0.0.1:1080";
                 Field(portableOptions, "Proxy", proxy);
+                Field(portableOptions, "MinimizeToTray", true); Field(portableOptions, "CloseToTray", false);
                 main.GetType().GetMethod("SaveSettings", F).Invoke(main, null);
                 Check(File.ReadAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "dotSharK.ini")).Contains("proxy-portable=" + Uri.EscapeDataString(proxy)), "proxy saved without user-bound encryption");
                 Field(portableOptions, "Proxy", "");
+                Field(portableOptions, "MinimizeToTray", false); Field(portableOptions, "CloseToTray", true);
                 main.GetType().GetMethod("LoadSettings", F).Invoke(main, null);
                 Check((string)Field(portableOptions, "Proxy") == proxy, "portable proxy roundtrips special characters");
+                Check((bool)Field(portableOptions, "MinimizeToTray") && !(bool)Field(portableOptions, "CloseToTray"), "tray options survive reload");
+                Field(portableOptions, "MinimizeToTray", false); Field(portableOptions, "CloseToTray", true);
+                main.GetType().GetMethod("SaveSettings", F).Invoke(main, null);
                 Field(portableOptions, "Proxy", "");
 
             }
@@ -92,8 +97,8 @@ internal static class UiV2Stage6Acceptance
             {
                 Show(settings);
                 var tabs = Find<DarkTabStrip>(settings, "tabSettings");
-                Check(tabs.Pages.Count == 5, "five integrated settings pages");
-                for (int i = 0; i < 5; ++i)
+                Check(tabs.Pages.Count == 6 && tabs.SelectedIndex == 0, "six integrated settings pages with options selected");
+                for (int i = 0; i < 6; ++i)
                 {
                     tabs.SelectedIndex = i;
                     Application.DoEvents();
@@ -104,14 +109,12 @@ internal static class UiV2Stage6Acceptance
                 Check(Find<DarkCheckBox>(settings, "chkKeepCompleted") != null,
                     "advanced settings has completed-history option");
                 Check(Find<DarkCheckBox>(settings, "chkKeepCompleted").Width > 250 &&
-                    Find<DarkCheckBox>(settings, "chkKeepCompleted").Text == "重启后保留已完成任务",
+                    Find<DarkCheckBox>(settings, "chkKeepCompleted").Text == "保留历史任务",
                     "advanced history checkbox caption has full visible width");
                 Check(Find<DarkCheckBox>(settings, "chkKeepCompleted").ForeColor == Theme.SecondaryText,
                     "completed history caption matches settings secondary text");
-                var qualityCaption = Find<Label>(settings, "lblVideoQualityLimitCaption");
-                Check(qualityCaption != null && qualityCaption.Text == "视频质量限制 前：" &&
-                    qualityCaption.Width >= TextRenderer.MeasureText(qualityCaption.Text, Theme.BodyFont).Width,
-                    "video quality caption is one fully visible string before the spinner");
+                Check(Find<DarkComboBox>(settings, "cboVideoQualityLimit").Items.Count == 2, "video quality has two choices");
+                Check(!Find<DarkCheckBox>(settings, "chkMinimizeToTray").Checked && Find<DarkCheckBox>(settings, "chkCloseToTray").Checked, "tray option defaults");
                 Check(Find<DarkComboBox>(settings, "cboSilentMaxResolution").SelectedIndex == 0,
                     "silent quality defaults to highest");
             }
@@ -260,6 +263,9 @@ internal static class UiV2Stage6Acceptance
             Find<FlatTextArea>(form, "txtNoProxySites").Text = "example.org";
             Find<FlatTextArea>(form, "txtCustomYtDlpArgs").Text = "--retries 3";
             Find<DarkCheckBox>(form, "chkKeepCompleted").Checked = true;
+            Find<DarkCheckBox>(form, "chkMinimizeToTray").Checked = true;
+            Find<DarkCheckBox>(form, "chkCloseToTray").Checked = false;
+            Find<DarkComboBox>(form, "cboVideoQualityLimit").SelectedIndex = 1;
             Find<DarkComboBox>(form, "cboSilentMaxResolution").SelectedIndex = 3;
             Find<Button>(form, "btnSave").PerformClick();
             Check(form.DialogResult == DialogResult.OK, "settings save returns OK");
@@ -273,6 +279,7 @@ internal static class UiV2Stage6Acceptance
             Check((string)Field(opt, "CookieMode") == "browser" && (string)Field(opt, "CustomArguments") == "--retries 3",
                 "browser cookie mode and custom yt-dlp arguments persist");
             Check((bool)Field(opt, "KeepCompletedTasks"), "completed-history checkbox saves");
+            Check((bool)Field(opt, "MinimizeToTray") && !(bool)Field(opt, "CloseToTray") && (int)Field(opt, "VideoQualityLimit") == 0, "tray and unlimited options save");
             Check((int)Field(opt, "SilentMaxHeight") == 1080, "1080p silent cap saves");
         }
     }
@@ -503,6 +510,26 @@ internal static class UiV2Stage6Acceptance
             Check(!main.Visible, "tray hides without closing V2");
             Invoke(ctx, "OpenMainWindow"); Application.DoEvents();
             Check(main.Visible, "tray restores V2 window");
+            var options = Field(main, "ytdlpOptions");
+            Field(options, "MinimizeToTray", false);
+            main.WindowState = FormWindowState.Minimized;
+            Application.DoEvents(); Application.DoEvents();
+            Check(main.Visible && main.WindowState == FormWindowState.Minimized, "minimize option off retains taskbar window");
+            main.WindowState = FormWindowState.Normal; Application.DoEvents();
+            Field(options, "MinimizeToTray", true);
+            main.WindowState = FormWindowState.Minimized;
+            Application.DoEvents(); Application.DoEvents();
+            Check(!main.Visible, "minimize option on hides to tray");
+            Invoke(ctx, "OpenMainWindow"); Application.DoEvents();
+            Field(options, "CloseToTray", true);
+            var closeArgs = new FormClosingEventArgs(CloseReason.UserClosing, false);
+            Invoke(ctx, "OnMainWindowClosing", main, closeArgs); Application.DoEvents();
+            Check(closeArgs.Cancel && !main.Visible && !main.IsDisposed, "close to tray keeps application alive");
+            Invoke(ctx, "OpenMainWindow"); Application.DoEvents();
+            Field(options, "CloseToTray", false);
+            closeArgs = new FormClosingEventArgs(CloseReason.UserClosing, false);
+            Invoke(ctx, "OnMainWindowClosing", main, closeArgs); Application.DoEvents();
+            Check(closeArgs.Cancel && main.IsDisposed, "close without tray exits application");
         }
         finally { ctx.ExitThread(); ctx.Dispose(); }
     }

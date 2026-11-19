@@ -23,14 +23,14 @@ namespace dotSharK
         private readonly string[] toolNames = { "yt-dlp.exe", "ffmpeg.exe", "ffprobe.exe", "deno.exe", "aria2c.exe" };
         private FlatTextBox proxyBox, geoProxyBox, profileRootBox, cookieFileBox;
         private FlatTextBox silentFolderBox;
-        private DarkCheckBox keepCompletedBox;
+        private DarkCheckBox keepCompletedBox, minimizeToTrayBox, closeToTrayBox;
         private V2Combo silentResolutionBox;
         private static readonly int[] SilentHeightOptions = { 0, 4320, 2160, 1080, 720 };
         private FlatTextArea ariaSitesBox, noProxySitesBox, customArgumentsBox;
         private DarkCheckBox proxyEnabledBox, geoProxyEnabledBox;
         private DarkNumeric fragmentsBox;
         private DarkNumeric downloadsBox;
-        private DarkNumeric qualityLimitBox;
+        private V2Combo qualityLimitBox;
         private V2Combo sourceBox, browserBox, profileBox;
         private Button profileSearchButton;
         private Label profileStatus, profileFoundCheck;
@@ -62,7 +62,7 @@ namespace dotSharK
                 ProxyEnabled = options.ProxyEnabled, GeoProxyEnabled = options.GeoProxyEnabled,
                 Aria2cPath = options.Aria2cPath, Aria2cSites = options.Aria2cSites,
                 NoProxySites = options.NoProxySites, CustomArguments = options.CustomArguments,
-                KeepCompletedTasks = options.KeepCompletedTasks, SilentMaxHeight = options.SilentMaxHeight
+                KeepCompletedTasks = options.KeepCompletedTasks, MinimizeToTray = options.MinimizeToTray, CloseToTray = options.CloseToTray, SilentMaxHeight = options.SilentMaxHeight
             };
             SuspendLayout();
             try
@@ -90,10 +90,12 @@ namespace dotSharK
                 Controls.Add(root);
                 var tabs = new DarkTabStrip { Name = "tabSettings", Dock = DockStyle.Fill,
                     Margin = Padding.Empty };
+                var pageOptions = NewPage();
                 var pageTools = NewPage();
                 var pageYt = NewPage();
                 var pageAdvanced = NewPage();
                 var pageSilent = NewPage();
+                tabs.AddPage("选项", pageOptions);
                 tabs.AddPage("外部工具", pageTools);
                 tabs.AddPage("YT-DLP", pageYt);
                 tabs.AddPage("高级下载", pageAdvanced);
@@ -102,11 +104,12 @@ namespace dotSharK
                 tabs.AddPage("插件注册", pagePlugins);
                 BuildPluginsPage(pagePlugins);
                 root.Controls.Add(tabs, 0, 0);
+                BuildOptionsPage(pageOptions);
                 BuildToolsPage(pageTools, new[] { ytDlp, ffmpeg, ffprobe, deno, aria2c });
                 BuildYtPage(pageYt);
                 BuildAdvancedPage(pageAdvanced);
                 BuildSilentPage(pageSilent);
-                tabs.SelectedIndex = 1;
+                tabs.SelectedIndex = 0;
 
                 var footer = new TableLayoutPanel
                 {
@@ -481,6 +484,42 @@ namespace dotSharK
             }
         }
 
+        private void BuildOptionsPage(Panel page)
+        {
+            var grid = FormTable(5);
+            grid.ColumnStyles[0].Width = 200;
+            keepCompletedBox = StyledToggle("保留历史任务", Options.KeepCompletedTasks);
+            keepCompletedBox.Name = "chkKeepCompleted";
+            minimizeToTrayBox = StyledToggle("最小化到系统托盘", Options.MinimizeToTray);
+            minimizeToTrayBox.Name = "chkMinimizeToTray";
+            closeToTrayBox = StyledToggle("关闭到系统托盘", Options.CloseToTray);
+            closeToTrayBox.Name = "chkCloseToTray";
+            foreach (var toggle in new[] { keepCompletedBox, minimizeToTrayBox, closeToTrayBox })
+            {
+                toggle.ForeColor = Theme.SecondaryText;
+                toggle.Dock = DockStyle.Fill;
+                toggle.Margin = Padding.Empty;
+            }
+            int row = 0;
+            foreach (var toggle in new[] { keepCompletedBox, minimizeToTrayBox, closeToTrayBox })
+            {
+                grid.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight + Theme.Space12));
+                grid.Controls.Add(SpacedRow(toggle), 0, row);
+                grid.SetColumnSpan(grid.GetControlFromPosition(0, row), 2);
+                row++;
+            }
+            downloadsBox = new DarkNumeric { Name = "numConcurrentDownloads", Minimum = 1, Maximum = 6,
+                Value = Math.Max(1, Math.Min(6, Options.ConcurrentDownloads)), Width = Theme.NumericWidth, Height = Theme.ControlHeight };
+            SettingRow(grid, 3, "同时下载视频数量", Row(Fixed(Theme.NumericWidth, downloadsBox),
+                Fixed(Theme.Space12), Fill(Note("队列同时运行的视频数（1–6）"))));
+            qualityLimitBox = StyledCombo(new object[] { "TOP3", "不限制" });
+            qualityLimitBox.Name = "cboVideoQualityLimit";
+            qualityLimitBox.SelectedIndex = Options.VideoQualityLimit == 0 ? 1 : 0;
+            SettingRow(grid, 4, "下载视频质量限制", Row(Fixed(Theme.Space24 * 8 + Theme.Space8, qualityLimitBox),
+                Fixed(Theme.Space12), Fill(Note("按分辨率档位显示；保留同档不同编码与 HDR"))));
+            MountPage(page, grid);
+        }
+
         private void BuildYtPage(Panel page)
         {
             var grid = FormTable(12);
@@ -512,20 +551,10 @@ namespace dotSharK
                 Fixed(Theme.NumericWidth, fragmentsBox), Fixed(Theme.Space12),
                 Fill(Note("下载分片并发数"))));
 
-            downloadsBox = new DarkNumeric
-            {
-                Name = "numConcurrentDownloads", Minimum = 1, Maximum = 6,
-                Value = Math.Max(1, Math.Min(6, Options.ConcurrentDownloads)),
-                Width = Theme.NumericWidth, Height = Theme.ControlHeight
-            };
-            SettingRow(grid, 3, "同时下载数", Row(
-                Fixed(Theme.NumericWidth, downloadsBox), Fixed(Theme.Space12),
-                Fill(Note("队列同时运行的视频数（1–6）"))));
-
             sourceBox = StyledCombo(new object[] { "浏览器", "Cookie 文件" });
             sourceBox.Name = "cboCookieSource";
             sourceBox.SelectedIndex = Options.CookieMode == "file" ? 1 : 0;
-            SettingRow(grid, 4, "Cookie 来源", Row(
+            SettingRow(grid, 3, "Cookie 来源", Row(
                 Fixed(Theme.Space24 * 8 + Theme.Space8, sourceBox), Fill(null)));
 
             var browsers = new[] {
@@ -541,7 +570,7 @@ namespace dotSharK
             for (int i = 0; i < browserBox.Items.Count; i++)
                 if (((BrowserOption)browserBox.Items[i]).Name == browserName)
                     browserBox.SelectedIndex = i;
-            SettingRow(grid, 5, "浏览器", Row(
+            SettingRow(grid, 4, "浏览器", Row(
                 Fixed(Theme.Space24 * 8 + Theme.Space8, browserBox), Fill(null)));
 
             profileRootBox = StyledTextBox(Options.CookieProfileRoot);
@@ -553,7 +582,7 @@ namespace dotSharK
             profileSearchButton.Name = "btnSearchProfiles";
             profileSearchButton.Click += async (s, e) => await SearchProfiles();
             // Equal 80px browse/search buttons, with a shared 8px gap.
-            SettingRow(grid, 6, "搜索目录", Row(
+            SettingRow(grid, 5, "搜索目录", Row(
                 Fill(profileRootBox), Fixed(Theme.Space8),
                 Fixed(Theme.BrowseButtonWidth, rootBrowse), Fixed(Theme.Space8),
                 Fixed(Theme.BrowseButtonWidth, profileSearchButton)));
@@ -567,7 +596,7 @@ namespace dotSharK
             profileFoundCheck.ForeColor = green;
             profileFoundCheck.TextAlign = ContentAlignment.MiddleCenter;
             profileFoundCheck.Visible = false;
-            SettingRow(grid, 7, "浏览器配置", Row(
+            SettingRow(grid, 6, "浏览器配置", Row(
                 Fill(profileBox), Fixed(Theme.Space8),
                 Fixed(Theme.Space24, profileFoundCheck)));
             if (!String.IsNullOrWhiteSpace(Options.CookieProfile))
@@ -579,39 +608,30 @@ namespace dotSharK
             profileStatus.Name = "lblProfileStatus";
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute,
                 Theme.ControlHeight + Theme.Space12));
-            grid.Controls.Add(SpacedRow(profileStatus), 1, 8);
+            grid.Controls.Add(SpacedRow(profileStatus), 1, 7);
 
             cookieFileBox = StyledTextBox(Options.CookieFile);
             cookieFileBox.Name = "txtCookieFile";
             var cookieBrowse = StyledButton("浏览…", false);
             cookieBrowse.Name = "btnBrowseCookieFile";
             cookieBrowse.Click += BrowseCookieFile;
-            SettingRow(grid, 9, "Cookie 文件", Row(
+            SettingRow(grid, 8, "Cookie 文件", Row(
                 Fill(cookieFileBox), Fixed(Theme.Space8),
                 Fixed(Theme.BrowseButtonWidth, cookieBrowse)));
 
-            qualityLimitBox = new DarkNumeric
-            {
-                Name = "numVideoQualityLimit", Minimum = 0, Maximum = 9999,
-                Value = Math.Max(0, Math.Min(9999, Options.VideoQualityLimit)),
-                Width = Theme.FullNumericWidth, Height = Theme.ControlHeight
-            };
-            // One continuous caption before the numeric field. The normal
-            // 96px settings-label column would otherwise clip "前：" away.
-            var qualityCaption = Label("视频质量限制 前：");
-            qualityCaption.Name = "lblVideoQualityLimitCaption";
-            int qualityCaptionWidth = TextRenderer.MeasureText(qualityCaption.Text,
-                Theme.BodyFont).Width + Theme.Space12;
-            grid.RowStyles.Add(new RowStyle(SizeType.Absolute,
-                Theme.ControlHeight + Theme.Space12));
-            var qualityRow = SpacedRow(Row(
-                Fixed(qualityCaptionWidth, qualityCaption),
-                Fixed(Theme.FullNumericWidth, qualityLimitBox), Fill(null)));
-            grid.Controls.Add(qualityRow, 0, 10);
-            grid.SetColumnSpan(qualityRow, 2);
-            grid.RowStyles.Add(new RowStyle(SizeType.Absolute,
-                Theme.ControlHeight + Theme.Space12));
-            grid.Controls.Add(SpacedRow(Note("默认前三个不同分辨率档位；0 为不限制。同分辨率的不同编码、HDR 选项均保留。")), 1, 11);
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight));
+            var commandTitle = Label("自定义 yt-dlp 原生命令行参数（下载与分析均生效）", true);
+            grid.Controls.Add(commandTitle, 0, 9); grid.SetColumnSpan(commandTitle, 2);
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space24 * 3));
+            customArgumentsBox = new FlatTextArea { Name = "txtCustomYtDlpArgs", Text = Options.CustomArguments ?? "",
+                Font = Theme.MonoFont, Dock = DockStyle.Fill, Margin = Padding.Empty };
+            grid.Controls.Add(customArgumentsBox, 0, 10); grid.SetColumnSpan(customArgumentsBox, 2);
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space24 * 2));
+            var hint = Note("例如 --retries 20 --no-mtime；支持带引号的参数值，自定义参数覆盖一般内置设置。" +
+                Environment.NewLine + "无代理站点规则优先于自定义代理参数。aria2c.exe 在「外部工具」页指定。");
+            grid.Controls.Add(hint, 0, 11); grid.SetColumnSpan(hint, 2);
+            // Keep all YT-DLP rows and the moved command explanation visible at minimum size.
+            for (int i = 0; i < 9; i++) grid.RowStyles[i].Height = Theme.ControlHeight + Theme.Space8;
             MountPage(page, grid);
 
             // Keep the original async search and save event handlers unchanged.
@@ -718,15 +738,6 @@ namespace dotSharK
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space24 * 4));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space24 * 2));
 
-            keepCompletedBox = StyledToggle("重启后保留已完成任务", Options.KeepCompletedTasks);
-            keepCompletedBox.Name = "chkKeepCompleted";
-            keepCompletedBox.ForeColor = Theme.SecondaryText;
-            // Standalone checkboxes do not autosize; fill the entire row so the
-            // Chinese caption renders, not only the 16px checkmark square.
-            keepCompletedBox.Dock = DockStyle.Fill;
-            keepCompletedBox.Margin = Padding.Empty;
-            root.Controls.Add(keepCompletedBox, 0, 0);
-            root.SetColumnSpan(keepCompletedBox, 3);
             root.Controls.Add(Label("使用 aria2c 下载的站点", true), 0, 2);
             root.Controls.Add(Label("以下站点不使用代理", true), 2, 2);
             ariaSitesBox = new FlatTextArea
@@ -743,22 +754,6 @@ namespace dotSharK
             root.Controls.Add(noProxySitesBox, 2, 3);
             root.Controls.Add(Note("空格/换行分隔域名，如 youtube.com，自动覆盖所有子域名；按输入网页网址匹配，不看视频 CDN。"), 0, 4);
             root.Controls.Add(Note("规则相同；命中时主代理和地域验证代理均不使用，已保存的代理地址不受影响。"), 2, 4);
-            var commandTitle = Label("自定义 yt-dlp 原生命令行参数（下载与分析均生效）", true);
-            root.Controls.Add(commandTitle, 0, 6);
-            root.SetColumnSpan(commandTitle, 3);
-            customArgumentsBox = new FlatTextArea
-            {
-                Name = "txtCustomYtDlpArgs",
-                Text = Options.CustomArguments ?? "",
-                Font = Theme.MonoFont, Dock = DockStyle.Fill, Margin = Padding.Empty
-            };
-            root.Controls.Add(customArgumentsBox, 0, 7);
-            root.SetColumnSpan(customArgumentsBox, 3);
-            var hint = Note("例如 --retries 20 --no-mtime；支持带引号的参数值，自定义参数覆盖一般内置设置。" +
-                Environment.NewLine +
-                "无代理站点规则优先于自定义代理参数。aria2c.exe 在「外部工具」页指定。");
-            root.Controls.Add(hint, 0, 8);
-            root.SetColumnSpan(hint, 3);
             MountPage(page, root);
         }
 
@@ -774,7 +769,7 @@ namespace dotSharK
             {
                 Uri uri;
                 if (!Uri.TryCreate(proxy, UriKind.Absolute, out uri) || !(uri.Scheme == "http" || uri.Scheme == "https" || uri.Scheme == "socks4" || uri.Scheme == "socks4a" || uri.Scheme == "socks5" || uri.Scheme == "socks5h"))
-                { profileStatus.Text = "代理地址格式不正确，请检查协议和端口。"; return; }
+                { DarkMessageBox.Show(this, "代理地址格式不正确，请检查协议和端口。", "dotSharK", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
             }
             if (sourceBox.SelectedIndex == 1 && !String.IsNullOrWhiteSpace(cookieFileBox.Text) && !File.Exists(cookieFileBox.Text.Trim()))
             { DarkMessageBox.Show(this, "找不到指定的 Cookie 文件。", "dotSharK", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
@@ -783,7 +778,7 @@ namespace dotSharK
             var browser = browserBox.SelectedItem as BrowserOption;
             string geoProxy = geoProxyBox.Text.Trim();
             if (geoProxyEnabledBox.Checked && geoProxy.Length > 0 && !IsValidProxy(geoProxy))
-            { profileStatus.Text = "地域验证代理格式不正确，请检查协议和端口。"; return; }
+            { DarkMessageBox.Show(this, "地域验证代理格式不正确，请检查协议和端口。", "dotSharK", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
             Options.Proxy = proxy; Options.GeoVerificationProxy = geoProxy;
             Options.ProxyEnabled = proxyEnabledBox.Checked; Options.GeoProxyEnabled = geoProxyEnabledBox.Checked;
             Options.Aria2cPath = Aria2cPath;
@@ -801,8 +796,10 @@ namespace dotSharK
                 DarkMessageBox.Show(this, ex.Message, "高级下载参数无效", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
-            Options.ConcurrentFragments = (int)fragmentsBox.Value; Options.ConcurrentDownloads = (int)downloadsBox.Value; Options.VideoQualityLimit = (int)qualityLimitBox.Value;
+            Options.ConcurrentFragments = (int)fragmentsBox.Value; Options.ConcurrentDownloads = (int)downloadsBox.Value; Options.VideoQualityLimit = qualityLimitBox.SelectedIndex == 1 ? 0 : 3;
             Options.KeepCompletedTasks = keepCompletedBox.Checked;
+            Options.MinimizeToTray = minimizeToTrayBox.Checked;
+            Options.CloseToTray = closeToTrayBox.Checked;
             Options.SilentMaxHeight = SilentHeightOptions[Math.Max(0, silentResolutionBox.SelectedIndex)];
             Options.CookieMode = sourceBox.SelectedIndex == 1 ? "file" : "browser";
             string silentFolder = silentFolderBox.Text.Trim();

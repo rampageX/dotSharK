@@ -217,7 +217,7 @@ namespace dotSharK.UiV2
                     new Point(centerX + Theme.Space4, centerY - 2),
                     new Point(centerX, centerY + 2) });
             DarkPaint.Border(e.Graphics, ClientRectangle, !Enabled ? Theme.Divider :
-                Focused || DroppedDown ? Theme.AccentFocus : Theme.Border);
+                Focused || DroppedDown ? Theme.FocusBorder : Theme.Border);
         }
         protected override void OnMouseDown(MouseEventArgs e)
         {

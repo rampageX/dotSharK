@@ -31,7 +31,7 @@ internal static class UiV2Stage5Acceptance
             {
                 Show(settings);
                 var tabs = Find<DarkTabStrip>(settings, "tabSettings");
-                Check(tabs.Pages.Count == 5, "settings has five pages");
+                Check(tabs.Pages.Count == 6, "settings has six pages");
                 Check(settings.FormBorderStyle == FormBorderStyle.Sizable, "settings is resizable");
                 Check(settings.AutoScaleMode == AutoScaleMode.Dpi, "settings uses DPI autoscaling");
                 var save = Find<Button>(settings, "btnSave");
@@ -44,7 +44,7 @@ internal static class UiV2Stage5Acceptance
                 settings.Size = settings.MinimumSize;
                 Application.DoEvents();
                 Check(save.Right <= settings.ClientSize.Width, "minimum size footer fits");
-                for (int i = 0; i < 4; i++)
+                for (int i = 0; i < 6; i++)
                 {
                     tabs.SelectedIndex = i;
                     Application.DoEvents();
@@ -56,7 +56,7 @@ internal static class UiV2Stage5Acceptance
                 settings.Size = new Size(Math.Max(original.Width, 1040), Math.Max(original.Height, 900));
                 Application.DoEvents();
                 int footerY = save.Top;
-                for (int i = 0; i < 4; i++)
+                for (int i = 0; i < 6; i++)
                 {
                     tabs.SelectedIndex = i;
                     Application.DoEvents();
@@ -66,7 +66,7 @@ internal static class UiV2Stage5Acceptance
                 Check(Find<FlatTextArea>(settings, "txtAria2cSites") != null &&
                     Find<FlatTextArea>(settings, "txtNoProxySites") != null &&
                     Find<FlatTextArea>(settings, "txtCustomYtDlpArgs") != null,
-                    "all three advanced multiline boxes use dark text area");
+                    "all three settings multiline boxes use dark text area");
                 Check(All(settings).OfType<ComboBox>().Count() == 0,
                     "settings avoids native ComboBox popup");
                 LogChrome("Settings", settings);

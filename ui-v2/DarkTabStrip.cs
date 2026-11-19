@@ -145,7 +145,7 @@ namespace dotSharK.UiV2
                             e.Graphics.FillRectangle(brush, x, Height - 2, width, 2);
                     x += width;
                 }
-                if (Focused) DarkPaint.Border(e.Graphics, ClientRectangle, Theme.AccentFocus);
+                if (Focused) DarkPaint.Border(e.Graphics, ClientRectangle, Theme.FocusBorder);
             }
             protected override void OnMouseMove(MouseEventArgs e)
             {

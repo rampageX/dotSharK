@@ -118,7 +118,7 @@ namespace dotSharK.UiV2
             DrawArrow(e.Graphics, spin.Left + spin.Width / 2, Height / 4, true);
             DrawArrow(e.Graphics, spin.Left + spin.Width / 2, 3 * Height / 4, false);
             DarkPaint.Border(e.Graphics, ClientRectangle,
-                !Enabled ? Theme.DisabledText : focused ? Theme.AccentFocus : Theme.Border);
+                !Enabled ? Theme.DisabledText : focused ? Theme.FocusBorder : Theme.Border);
         }
         private void DrawArrow(Graphics graphics, int x, int y, bool up)
         {

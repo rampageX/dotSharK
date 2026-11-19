@@ -24,6 +24,8 @@ namespace dotSharK
         public string CookieProfile = "";
         public string CookieFile = "";
         public bool KeepCompletedTasks;
+        public bool MinimizeToTray;
+        public bool CloseToTray = true;
         public int SilentMaxHeight; // 0=highest; otherwise 4320/2160/1080/720
     }
 
