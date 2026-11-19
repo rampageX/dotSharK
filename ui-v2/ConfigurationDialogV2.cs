@@ -630,7 +630,9 @@ namespace dotSharK
             var hint = Note("例如 --retries 20 --no-mtime；支持带引号的参数值，自定义参数覆盖一般内置设置。" +
                 Environment.NewLine + "无代理站点规则优先于自定义代理参数。aria2c.exe 在「外部工具」页指定。");
             grid.Controls.Add(hint, 0, 11); grid.SetColumnSpan(hint, 2);
-            // Keep all YT-DLP rows and the moved command explanation visible at minimum size.\n            for (int i = 0; i < 9; i++) grid.RowStyles[i].Height = Theme.ControlHeight + Theme.Space8;\n            MountPage(page, grid);
+            // Keep all YT-DLP rows and the moved command explanation visible at minimum size.
+            for (int i = 0; i < 9; i++) grid.RowStyles[i].Height = Theme.ControlHeight + Theme.Space8;
+            MountPage(page, grid);
 
             // Keep the original async search and save event handlers unchanged.
             sourceBox.SelectedIndexChanged += async (s, e) =>
