@@ -70,7 +70,7 @@ namespace dotSharK.UiV2
             using (var brush = new SolidBrush(!Enabled ? Theme.ScrollTrack :
                 dragging ? Theme.ScrollThumbDrag : hover ? Theme.ScrollThumbHover : Theme.ScrollThumb))
                 e.Graphics.FillRectangle(brush, thumb);
-            if (Focused) DarkPaint.Border(e.Graphics, ClientRectangle, Theme.AccentFocus);
+            if (Focused) DarkPaint.Border(e.Graphics, ClientRectangle, Theme.FocusBorder);
         }
         protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); hover = true; Invalidate(); }
         protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); if (!dragging) { hover = false; Invalidate(); } }
