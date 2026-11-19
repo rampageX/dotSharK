@@ -622,7 +622,7 @@ namespace dotSharK
             grid.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight));
             var commandTitle = Label("自定义 yt-dlp 原生命令行参数（下载与分析均生效）", true);
             grid.Controls.Add(commandTitle, 0, 9); grid.SetColumnSpan(commandTitle, 2);
-            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space24 * 4));
+            grid.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space24 * 3));
             customArgumentsBox = new FlatTextArea { Name = "txtCustomYtDlpArgs", Text = Options.CustomArguments ?? "",
                 Font = Theme.MonoFont, Dock = DockStyle.Fill, Margin = Padding.Empty };
             grid.Controls.Add(customArgumentsBox, 0, 10); grid.SetColumnSpan(customArgumentsBox, 2);
@@ -630,7 +630,7 @@ namespace dotSharK
             var hint = Note("例如 --retries 20 --no-mtime；支持带引号的参数值，自定义参数覆盖一般内置设置。" +
                 Environment.NewLine + "无代理站点规则优先于自定义代理参数。aria2c.exe 在「外部工具」页指定。");
             grid.Controls.Add(hint, 0, 11); grid.SetColumnSpan(hint, 2);
-            MountPage(page, grid);
+            // Keep all YT-DLP rows and the moved command explanation visible at minimum size.\n            for (int i = 0; i < 9; i++) grid.RowStyles[i].Height = Theme.ControlHeight + Theme.Space8;\n            MountPage(page, grid);
 
             // Keep the original async search and save event handlers unchanged.
             sourceBox.SelectedIndexChanged += async (s, e) =>
