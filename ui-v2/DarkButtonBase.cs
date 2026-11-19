@@ -37,7 +37,7 @@ namespace dotSharK.UiV2
             Color back = !Enabled ? Theme.Panel : pressed ? PressedColor : hovered ? HoverColor : NormalColor;
             graphics.Clear(back);
             DarkPaint.Border(graphics, ClientRectangle,
-                !Enabled ? Theme.Divider : Focused ? Theme.AccentFocus : OutlineColor);
+                !Enabled ? Theme.Divider : Focused ? Theme.FocusBorder : OutlineColor);
         }
         protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); hovered = true; Invalidate(); }
         protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); hovered = false; pressed = false; Invalidate(); }
