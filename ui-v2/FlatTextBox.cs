@@ -82,7 +82,7 @@ namespace dotSharK.UiV2
         {
             e.Graphics.Clear(Theme.Input);
             DarkPaint.Border(e.Graphics, ClientRectangle, !Enabled ? Theme.DisabledText :
-                focused ? Theme.AccentFocus : ReadOnly ? Theme.ScrollThumb : Theme.Border);
+                focused ? Theme.FocusBorder : ReadOnly ? Theme.ScrollThumb : Theme.Border);
         }
     }
 }
