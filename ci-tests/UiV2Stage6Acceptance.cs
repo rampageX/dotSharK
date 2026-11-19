@@ -510,6 +510,26 @@ internal static class UiV2Stage6Acceptance
             Check(!main.Visible, "tray hides without closing V2");
             Invoke(ctx, "OpenMainWindow"); Application.DoEvents();
             Check(main.Visible, "tray restores V2 window");
+            var options = Field(main, "ytdlpOptions");
+            Field(options, "MinimizeToTray", false);
+            main.WindowState = FormWindowState.Minimized;
+            Application.DoEvents(); Application.DoEvents();
+            Check(main.Visible && main.WindowState == FormWindowState.Minimized, "minimize option off retains taskbar window");
+            main.WindowState = FormWindowState.Normal; Application.DoEvents();
+            Field(options, "MinimizeToTray", true);
+            main.WindowState = FormWindowState.Minimized;
+            Application.DoEvents(); Application.DoEvents();
+            Check(!main.Visible, "minimize option on hides to tray");
+            Invoke(ctx, "OpenMainWindow"); Application.DoEvents();
+            Field(options, "CloseToTray", true);
+            var closeArgs = new FormClosingEventArgs(CloseReason.UserClosing, false);
+            Invoke(ctx, "OnMainWindowClosing", main, closeArgs); Application.DoEvents();
+            Check(closeArgs.Cancel && !main.Visible && !main.IsDisposed, "close to tray keeps application alive");
+            Invoke(ctx, "OpenMainWindow"); Application.DoEvents();
+            Field(options, "CloseToTray", false);
+            closeArgs = new FormClosingEventArgs(CloseReason.UserClosing, false);
+            Invoke(ctx, "OnMainWindowClosing", main, closeArgs); Application.DoEvents();
+            Check(closeArgs.Cancel && main.IsDisposed, "close without tray exits application");
         }
         finally { ctx.ExitThread(); ctx.Dispose(); }
     }
