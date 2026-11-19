@@ -59,6 +59,7 @@ namespace dotSharK.UiV2
         public static readonly Color AccentHover = Color.FromArgb(0x2A, 0x7A, 0x60);
         public static readonly Color AccentPressed = Color.FromArgb(0x21, 0x68, 0x4F);
         public static readonly Color AccentSelection = Color.FromArgb(0x2C, 0x41, 0x39);
+        public static readonly Color FocusBorder = Color.FromArgb(0x70, 0x8D, 0x80);
         public static readonly Color AccentFocus = Color.FromArgb(0x4D, 0xD4, 0x9B);
         public static readonly Color SuccessText = Color.FromArgb(0x53, 0xD6, 0xA0);
         public static readonly Color Warning = Color.FromArgb(0xE6, 0xB1, 0x3D);
