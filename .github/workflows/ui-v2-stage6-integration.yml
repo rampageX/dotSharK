@@ -9,6 +9,7 @@ on:
       - feature/plugin-pairing
       - feature/firefox-extension
       - feature/soft-focus
+      - feature/options-page
   workflow_dispatch:
 
 jobs:

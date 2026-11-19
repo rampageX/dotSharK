@@ -59,7 +59,7 @@ namespace dotSharK
             mainWindow.Resize += (s, e) =>
             {
                 if (mainWindow.IsDisposed || exiting || hiding) return;
-                if (mainWindow.WindowState == FormWindowState.Minimized)
+                if (mainWindow.WindowState == FormWindowState.Minimized && mainWindow.MinimizeToTray)
                 {
                     // Fallback for programmatic WindowState changes and Win+M.
                     // Native minimize already animates; hide after the message
@@ -75,7 +75,7 @@ namespace dotSharK
                             }
                         }));
                 }
-                else mainRestoreState = mainWindow.WindowState;
+                else if (mainWindow.WindowState != FormWindowState.Minimized) mainRestoreState = mainWindow.WindowState;
             };
 
             // Keep a stable HWND even when the first launch comes from a
@@ -135,11 +135,12 @@ namespace dotSharK
                 mainWindow.EnqueueBrowserUrl(request.Url, request.JobPath);
         }
 
-        private void OnMainWindowClosing(object sender, FormClosingEventArgs e)
+        private async void OnMainWindowClosing(object sender, FormClosingEventArgs e)
         {
             if (exiting || e.CloseReason != CloseReason.UserClosing) return;
             e.Cancel = true;
-            HideMainWindow("SC_CLOSE");
+            if (mainWindow.CloseToTray) HideMainWindow("SC_CLOSE");
+            else await StopAndExitAsync(null);
         }
 
         private void HideMainWindow(string reason)
@@ -305,7 +306,7 @@ namespace dotSharK
         {
             if (exiting) return;
             exiting = true;
-            exitItem.Enabled = false;
+            if (exitItem != null) exitItem.Enabled = false;
             refreshTimer.Stop();
             TraceState("Exit requested");
             await mainWindow.CancelQueueForExitAsync();
