@@ -24,7 +24,8 @@ namespace dotSharK
         private FlatTextBox proxyBox, geoProxyBox, profileRootBox, cookieFileBox;
         private FlatTextBox silentFolderBox;
         private DarkCheckBox keepCompletedBox, minimizeToTrayBox, closeToTrayBox;
-        private V2Combo silentResolutionBox;
+        private V2Combo silentResolutionBox, silentCodecBox;
+        private static readonly string[] SilentCodecOptions = { "AV1", "HEVC", "VP9", "H264" };
         private static readonly int[] SilentHeightOptions = { 0, 4320, 2160, 1080, 720 };
         private FlatTextArea ariaSitesBox, noProxySitesBox, customArgumentsBox;
         private DarkCheckBox proxyEnabledBox, geoProxyEnabledBox;
@@ -62,7 +63,7 @@ namespace dotSharK
                 ProxyEnabled = options.ProxyEnabled, GeoProxyEnabled = options.GeoProxyEnabled,
                 Aria2cPath = options.Aria2cPath, Aria2cSites = options.Aria2cSites,
                 NoProxySites = options.NoProxySites, CustomArguments = options.CustomArguments,
-                KeepCompletedTasks = options.KeepCompletedTasks, MinimizeToTray = options.MinimizeToTray, CloseToTray = options.CloseToTray, SilentMaxHeight = options.SilentMaxHeight
+                KeepCompletedTasks = options.KeepCompletedTasks, MinimizeToTray = options.MinimizeToTray, CloseToTray = options.CloseToTray, SilentMaxHeight = options.SilentMaxHeight, SilentVideoCodec = options.SilentVideoCodec
             };
             SuspendLayout();
             try
@@ -657,11 +658,13 @@ namespace dotSharK
         {
             var content = new TableLayoutPanel
             {
-                ColumnCount = 1, RowCount = 7, Margin = Padding.Empty,
+                ColumnCount = 1, RowCount = 9, Margin = Padding.Empty,
                 Padding = Padding.Empty, BackColor = bg,
                 AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink
             };
             content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            content.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight));
+            content.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space12));
             content.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight));
             content.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.Space12));
             content.RowStyles.Add(new RowStyle(SizeType.Absolute, Theme.ControlHeight));
@@ -700,11 +703,19 @@ namespace dotSharK
                 Fixed(Theme.LabelColumnWidth, Label("最高分辨率")),
                 Fixed(Theme.Space24 * 8 + Theme.Space8, silentResolutionBox),
                 Fixed(Theme.Space16), Fill(Note("仅限制视频分辨率，其余质量排序不变"))), 0, 4);
+            silentCodecBox = StyledCombo(new object[] { "AV1", "HEVC", "VP9", "H264" });
+            silentCodecBox.Name = "cboSilentVideoCodec";
+            int codecIndex = Array.IndexOf(SilentCodecOptions, Options.SilentVideoCodec);
+            silentCodecBox.SelectedIndex = codecIndex < 0 ? 0 : codecIndex;
+            content.Controls.Add(Row(
+                Fixed(Theme.LabelColumnWidth, Label("视频编码")),
+                Fixed(Theme.Space24 * 8 + Theme.Space8, silentCodecBox),
+                Fixed(Theme.Space16), Fill(Note("所选编码不可用时自动选择其他编码"))), 0, 6);
             content.Controls.Add(Row(
                 Fixed(Theme.LabelColumnWidth), Fill(Note(
                     "只影响浏览器右键“发送到 dotSharK”下载。主窗口的“保存到”保持独立。" +
                     Environment.NewLine +
-                    "帧率 / HDR / AV1 / 音频优先级不变；继续使用已保存的代理和 Cookie。"))), 0, 6);
+                    "帧率 / HDR / 音频优先级不变；继续使用已保存的代理和 Cookie。"))), 0, 8);
             MountPage(page, content);
         }
 
@@ -801,6 +812,7 @@ namespace dotSharK
             Options.MinimizeToTray = minimizeToTrayBox.Checked;
             Options.CloseToTray = closeToTrayBox.Checked;
             Options.SilentMaxHeight = SilentHeightOptions[Math.Max(0, silentResolutionBox.SelectedIndex)];
+            Options.SilentVideoCodec = SilentCodecOptions[Math.Max(0, silentCodecBox.SelectedIndex)];
             Options.CookieMode = sourceBox.SelectedIndex == 1 ? "file" : "browser";
             string silentFolder = silentFolderBox.Text.Trim();
             if (String.IsNullOrWhiteSpace(silentFolder))

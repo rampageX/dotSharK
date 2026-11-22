@@ -26,6 +26,7 @@ namespace dotSharK
         public bool KeepCompletedTasks;
         public bool MinimizeToTray;
         public bool CloseToTray = true;
+        public string SilentVideoCodec = "AV1";
         public int SilentMaxHeight; // 0=highest; otherwise 4320/2160/1080/720
     }
 

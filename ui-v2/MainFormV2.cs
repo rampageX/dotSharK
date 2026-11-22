@@ -1056,8 +1056,8 @@ namespace dotSharK
         private void AddQueueItem(DownloadQueueItem item)
         {
             queueItems.Add(item);
-            string quality = item.BrowserSilent ? (ytdlpOptions.SilentMaxHeight == 0 ? "最高画质 · AV1 优先" :
-                ytdlpOptions.SilentMaxHeight + "p 以内 · AV1 优先")
+            string quality = item.BrowserSilent ? (ytdlpOptions.SilentMaxHeight == 0 ? "最高画质" :
+                ytdlpOptions.SilentMaxHeight + "p 以内") + " · " + ytdlpOptions.SilentVideoCodec + " 优先"
                 : item.AudioOnly ? "仅音频" : item.PlaylistItem
                 ? (item.TargetHeight > 0 ? item.TargetHeight + "p " + item.TargetCodec : "最高可用")
                 : (item.Video == null ? "自动" : item.Video.Label);
@@ -1271,6 +1271,7 @@ namespace dotSharK
                         else if (key == "keep-completed") ytdlpOptions.KeepCompletedTasks = value == "1";
                         else if (key == "minimize-to-tray") ytdlpOptions.MinimizeToTray = value == "1";
                         else if (key == "close-to-tray") ytdlpOptions.CloseToTray = value != "0";
+                        else if (key == "silent-video-codec" && (value == "AV1" || value == "HEVC" || value == "VP9" || value == "H264")) ytdlpOptions.SilentVideoCodec = value;
                         else if (key == "silent-max-height") { int h; if (Int32.TryParse(value, out h) && (h == 0 || h == 4320 || h == 2160 || h == 1080 || h == 720)) ytdlpOptions.SilentMaxHeight = h; }
                         else if (key == "proxy-enabled") ytdlpOptions.ProxyEnabled = value != "0";
                         else if (key == "geo-proxy-enabled") ytdlpOptions.GeoProxyEnabled = value != "0";
@@ -1312,6 +1313,7 @@ namespace dotSharK
                     "minimize-to-tray=" + (ytdlpOptions.MinimizeToTray ? "1" : "0"),
                     "close-to-tray=" + (ytdlpOptions.CloseToTray ? "1" : "0"),
                     "silent-max-height=" + ytdlpOptions.SilentMaxHeight,
+                    "silent-video-codec=" + ytdlpOptions.SilentVideoCodec,
                     "fragments=" + ytdlpOptions.ConcurrentFragments, "downloads=" + Math.Max(1, Math.Min(6, ytdlpOptions.ConcurrentDownloads)),
                     "video-quality-limit=" + ytdlpOptions.VideoQualityLimit,
                     "silent-folder=" + Uri.EscapeDataString(ytdlpOptions.SilentDownloadFolder ?? ""),

@@ -204,13 +204,23 @@ namespace dotSharK
             if (result.ExitCode != 0) throw new InvalidOperationException(UsefulError(result.Stderr, result.ExitCode));
         }
 
-        // Preserve FPS, HDR, codec, bitrate and audio preference; cap only height.
+        // Prefer the chosen codec, then fall back to any available video within the cap.
         internal static string SilentFormatSelector(YtDlpOptions options)
         {
             int height = options == null ? 0 : options.SilentMaxHeight;
-            if (height != 4320 && height != 2160 && height != 1080 && height != 720)
-                return "bv*+ba/b";
-            return "bv*[height<=" + height + "]+ba/b[height<=" + height + "]";
+            string cap = height == 4320 || height == 2160 || height == 1080 || height == 720
+                ? "[height<=" + height + "]" : "";
+            string codec = options == null ? "AV1" : options.SilentVideoCodec;
+            string pattern;
+            switch (codec)
+            {
+                case "HEVC": pattern = "^(hev1|hvc1|hevc|h265)"; break;
+                case "VP9": pattern = "^(vp09|vp9)"; break;
+                case "H264": pattern = "^(avc1|avc3|h264)"; break;
+                default: pattern = "^(av01|av1)"; break;
+            }
+            string preferred = "[vcodec~='" + pattern + "']" + cap;
+            return "bv*" + preferred + "+ba/b" + preferred + "/bv*" + cap + "+ba/b" + cap;
         }
 
         // Browser download only; normal queued video quality is unchanged.

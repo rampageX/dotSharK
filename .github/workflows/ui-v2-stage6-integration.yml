@@ -10,6 +10,7 @@ on:
       - feature/firefox-extension
       - feature/soft-focus
       - feature/options-page
+      - feature/silent-codec
   workflow_dispatch:
 
 jobs:
