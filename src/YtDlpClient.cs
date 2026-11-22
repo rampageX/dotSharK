@@ -204,13 +204,27 @@ namespace dotSharK
             if (result.ExitCode != 0) throw new InvalidOperationException(UsefulError(result.Stderr, result.ExitCode));
         }
 
-        // Preserve FPS, HDR, codec, bitrate and audio preference; cap only height.
+        // Search codecs from the selected entry, wrapping around once before the generic fallback.
+        internal static readonly string[] SilentCodecOrder = { "HEVC", "VP9", "H264", "AV1" };
         internal static string SilentFormatSelector(YtDlpOptions options)
         {
             int height = options == null ? 0 : options.SilentMaxHeight;
-            if (height != 4320 && height != 2160 && height != 1080 && height != 720)
-                return "bv*+ba/b";
-            return "bv*[height<=" + height + "]+ba/b[height<=" + height + "]";
+            string cap = height == 4320 || height == 2160 || height == 1080 || height == 720
+                ? "[height<=" + height + "]" : "";
+            string[] patterns = { "^(hev1|hvc1|hevc|h265)", "^(vp09|vp9)",
+                "^(avc1|avc3|h264)", "^(av01|av1)" };
+            int start = Array.IndexOf(SilentCodecOrder, options == null ? "HEVC" : options.SilentVideoCodec);
+            if (start < 0) start = 0;
+            var choices = new List<string>();
+            for (int i = 0; i < patterns.Length; ++i)
+            {
+                string filter = "[vcodec~='" + patterns[(start + i) % patterns.Length] + "']" + cap;
+                choices.Add("bv*" + filter + "+ba");
+                choices.Add("b" + filter);
+            }
+            choices.Add("bv*" + cap + "+ba");
+            choices.Add("b" + cap);
+            return String.Join("/", choices);
         }
 
         // Browser download only; normal queued video quality is unchanged.
