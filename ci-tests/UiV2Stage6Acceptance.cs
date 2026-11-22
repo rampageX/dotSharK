@@ -117,7 +117,7 @@ internal static class UiV2Stage6Acceptance
                 Check(!Find<DarkCheckBox>(settings, "chkMinimizeToTray").Checked && Find<DarkCheckBox>(settings, "chkCloseToTray").Checked, "tray option defaults");
                 Check(Find<DarkComboBox>(settings, "cboSilentMaxResolution").SelectedIndex == 0,
                     "silent quality defaults to highest");
-                Check(Find<DarkComboBox>(settings, "cboSilentVideoCodec").Items.Count == 4 && Find<DarkComboBox>(settings, "cboSilentVideoCodec").SelectedIndex == 0, "silent codec defaults to AV1 and offers four choices");
+                Check(Find<DarkComboBox>(settings, "cboSilentVideoCodec").Items.Count == 4 && Find<DarkComboBox>(settings, "cboSilentVideoCodec").SelectedIndex == 0, "silent codec defaults to HEVC and offers four choices");
             }
             using (var quality = (Form)Activator.CreateInstance(Type("SingleVideoDialogV2"), F, null, new[] { media }, null))
             {
@@ -283,7 +283,7 @@ internal static class UiV2Stage6Acceptance
             Check((bool)Field(opt, "KeepCompletedTasks"), "completed-history checkbox saves");
             Check((bool)Field(opt, "MinimizeToTray") && !(bool)Field(opt, "CloseToTray") && (int)Field(opt, "VideoQualityLimit") == 0, "tray and unlimited options save");
             Check((int)Field(opt, "SilentMaxHeight") == 1080, "1080p silent cap saves");
-            Check((string)Field(opt, "SilentVideoCodec") == "HEVC", "silent codec selection saves");
+            Check((string)Field(opt, "SilentVideoCodec") == "VP9", "silent codec selection saves");
         }
     }
     static void CheckCompletedStorage()
@@ -319,12 +319,20 @@ internal static class UiV2Stage6Acceptance
     {
         var opt = New("YtDlpOptions");
         var limits = new[] { 0, 4320, 2160, 1080, 720 };
-        foreach (string codec in new[] { "AV1", "HEVC", "VP9", "H264" })
+        string[] codecs = { "HEVC", "VP9", "H264", "AV1" };
+        string[] prefixes = { "hev1|hvc1", "vp09|vp9", "avc1|avc3", "av01|av1" };
+        for (int start = 0; start < codecs.Length; ++start)
         {
-            Field(opt, "SilentVideoCodec", codec);
+            Field(opt, "SilentVideoCodec", codecs[start]);
             string selected = (string)Static("YtDlpClient", "SilentFormatSelector", opt);
-            string expected = codec == "HEVC" ? "hev1|hvc1" : codec == "VP9" ? "vp09|vp9" : codec == "H264" ? "avc1|avc3" : "av01|av1";
-            Check(selected.Contains(expected) && selected.Contains("/bv*"), "silent codec preference and fallback " + codec);
+            int previous = -1;
+            for (int offset = 0; offset < codecs.Length; ++offset)
+            {
+                int position = selected.IndexOf(prefixes[(start + offset) % codecs.Length], StringComparison.Ordinal);
+                Check(position > previous, "silent codec cyclic fallback " + codecs[start] + " step " + offset);
+                previous = position;
+            }
+            Check(selected.Contains("/bv*+ba/b"), "silent codec generic fallback " + codecs[start]);
         }
         foreach (int limit in limits)
         {

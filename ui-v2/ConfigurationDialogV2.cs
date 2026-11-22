@@ -25,7 +25,7 @@ namespace dotSharK
         private FlatTextBox silentFolderBox;
         private DarkCheckBox keepCompletedBox, minimizeToTrayBox, closeToTrayBox;
         private V2Combo silentResolutionBox, silentCodecBox;
-        private static readonly string[] SilentCodecOptions = { "AV1", "HEVC", "VP9", "H264" };
+        private static readonly string[] SilentCodecOptions = YtDlpClient.SilentCodecOrder;
         private static readonly int[] SilentHeightOptions = { 0, 4320, 2160, 1080, 720 };
         private FlatTextArea ariaSitesBox, noProxySitesBox, customArgumentsBox;
         private DarkCheckBox proxyEnabledBox, geoProxyEnabledBox;
@@ -703,14 +703,14 @@ namespace dotSharK
                 Fixed(Theme.LabelColumnWidth, Label("最高分辨率")),
                 Fixed(Theme.Space24 * 8 + Theme.Space8, silentResolutionBox),
                 Fixed(Theme.Space16), Fill(Note("仅限制视频分辨率，其余质量排序不变"))), 0, 4);
-            silentCodecBox = StyledCombo(new object[] { "AV1", "HEVC", "VP9", "H264" });
+            silentCodecBox = StyledCombo(new object[] { "HEVC", "VP9", "H264", "AV1" });
             silentCodecBox.Name = "cboSilentVideoCodec";
             int codecIndex = Array.IndexOf(SilentCodecOptions, Options.SilentVideoCodec);
             silentCodecBox.SelectedIndex = codecIndex < 0 ? 0 : codecIndex;
             content.Controls.Add(Row(
                 Fixed(Theme.LabelColumnWidth, Label("视频编码")),
                 Fixed(Theme.Space24 * 8 + Theme.Space8, silentCodecBox),
-                Fixed(Theme.Space16), Fill(Note("所选编码不可用时自动选择其他编码"))), 0, 6);
+                Fixed(Theme.Space16), Fill(Note("从所选编码开始，按列表顺序循环选择"))), 0, 6);
             content.Controls.Add(Row(
                 Fixed(Theme.LabelColumnWidth), Fill(Note(
                     "只影响浏览器右键“发送到 dotSharK”下载。主窗口的“保存到”保持独立。" +

@@ -204,23 +204,27 @@ namespace dotSharK
             if (result.ExitCode != 0) throw new InvalidOperationException(UsefulError(result.Stderr, result.ExitCode));
         }
 
-        // Prefer the chosen codec, then fall back to any available video within the cap.
+        // Search codecs from the selected entry, wrapping around once before the generic fallback.
+        internal static readonly string[] SilentCodecOrder = { "HEVC", "VP9", "H264", "AV1" };
         internal static string SilentFormatSelector(YtDlpOptions options)
         {
             int height = options == null ? 0 : options.SilentMaxHeight;
             string cap = height == 4320 || height == 2160 || height == 1080 || height == 720
                 ? "[height<=" + height + "]" : "";
-            string codec = options == null ? "AV1" : options.SilentVideoCodec;
-            string pattern;
-            switch (codec)
+            string[] patterns = { "^(hev1|hvc1|hevc|h265)", "^(vp09|vp9)",
+                "^(avc1|avc3|h264)", "^(av01|av1)" };
+            int start = Array.IndexOf(SilentCodecOrder, options == null ? "HEVC" : options.SilentVideoCodec);
+            if (start < 0) start = 0;
+            var choices = new List<string>();
+            for (int i = 0; i < patterns.Length; ++i)
             {
-                case "HEVC": pattern = "^(hev1|hvc1|hevc|h265)"; break;
-                case "VP9": pattern = "^(vp09|vp9)"; break;
-                case "H264": pattern = "^(avc1|avc3|h264)"; break;
-                default: pattern = "^(av01|av1)"; break;
+                string filter = "[vcodec~='" + patterns[(start + i) % patterns.Length] + "']" + cap;
+                choices.Add("bv*" + filter + "+ba");
+                choices.Add("b" + filter);
             }
-            string preferred = "[vcodec~='" + pattern + "']" + cap;
-            return "bv*" + preferred + "+ba/b" + preferred + "/bv*" + cap + "+ba/b" + cap;
+            choices.Add("bv*" + cap + "+ba");
+            choices.Add("b" + cap);
+            return String.Join("/", choices);
         }
 
         // Browser download only; normal queued video quality is unchanged.
